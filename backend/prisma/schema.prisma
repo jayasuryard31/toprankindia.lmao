@@ -1,0 +1,17 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Calculation {
+  id        Int      @id @default(autoincrement())
+  a         Float
+  b         Float
+  result    Float
+  createdAt DateTime @default(now())
+
+  @@map("calculations")
+}

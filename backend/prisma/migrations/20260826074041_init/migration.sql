@@ -1,0 +1,10 @@
+-- CreateTable
+CREATE TABLE "calculations" (
+    "id" SERIAL NOT NULL,
+    "a" DOUBLE PRECISION NOT NULL,
+    "b" DOUBLE PRECISION NOT NULL,
+    "result" DOUBLE PRECISION NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "calculations_pkey" PRIMARY KEY ("id")
+);
