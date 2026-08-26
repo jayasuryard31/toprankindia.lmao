@@ -7,6 +7,7 @@ const rateLimit = require("express-rate-limit");
 
 const routeIndex = require("./routeIndex");
 const { errorHandler } = require("./Middleware/errorHandler");
+const ApiResponse = require("./Globals/ApiResponse");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -49,6 +50,10 @@ app.use("/api", routeIndex);
 
 app.get("/", (req, res) => {
   res.json({ status: "ok" });
+});
+
+app.get("/api/health", (req, res) => {
+  res.json(ApiResponse.result("SUCCESS", { status: "ok", uptime: process.uptime() }));
 });
 
 app.use(errorHandler);
