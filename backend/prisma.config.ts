@@ -8,10 +8,8 @@ export default defineConfig({
   migrations: {
     path: path.join("prisma", "migrations"),
   },
-  experimental: {
-    adapter: true,
+  datasource: {
+    url: process.env.DIRECT_URL,
   },
   engine: "js",
-  adapter: async () =>
-    new PrismaPg({ connectionString: process.env.DIRECT_URL }),
 });

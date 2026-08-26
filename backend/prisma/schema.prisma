@@ -6,12 +6,89 @@ datasource db {
   provider = "postgresql"
 }
 
-model Calculation {
-  id        Int      @id @default(autoincrement())
-  a         Float
-  b         Float
-  result    Float
-  createdAt DateTime @default(now())
+model Product {
+  id            String   @id @default(cuid())
+  websiteUrl    String   @map("website_url")
+  normalizedUrl String   @unique @map("normalized_url")
+  websiteName   String   @default("") @map("website_name")
+  description   String   @default("")
+  logoUrl       String   @default("") @map("logo_url")
+  faviconUrl    String   @default("") @map("favicon_url")
+  categoryId    Int      @map("category_id")
+  currentAmount Int      @default(0) @map("current_amount")
+  currency      String   @default("INR")
+  paymentStatus String   @default("CREATED") @map("payment_status")
+  isActive      Boolean  @default(false) @map("is_active")
+  clickCount    Int      @default(0) @map("click_count")
+  totalPayments Int      @default(0) @map("total_payments")
+  lastRankedAt  DateTime? @map("last_ranked_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
-  @@map("calculations")
+  bids     Bid[]
+  clicks   ProductClick[]
+  payments Payment[]
+
+  @@index([categoryId])
+  @@index([currentAmount(sort: Desc)])
+  @@index([createdAt])
+  @@index([isActive])
+  @@index([paymentStatus])
+  @@map("products")
+}
+
+model Bid {
+  id               String   @id @default(cuid())
+  productId        String   @map("product_id")
+  amount           Int
+  currency         String   @default("INR")
+  razorpayOrderId  String   @map("razorpay_order_id")
+  razorpayPaymentId String  @default("") @map("razorpay_payment_id")
+  status           String   @default("CREATED")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@index([amount(sort: Desc)])
+  @@index([status])
+  @@index([createdAt])
+  @@index([razorpayOrderId])
+  @@index([razorpayPaymentId])
+  @@map("bids")
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  productId         String   @map("product_id")
+  razorpayOrderId   String   @unique @map("razorpay_order_id")
+  razorpayPaymentId String   @unique @map("razorpay_payment_id")
+  razorpaySignature String   @default("") @map("razorpay_signature")
+  amount            Int
+  currency          String   @default("INR")
+  status            String   @default("CREATED")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@index([status])
+  @@index([razorpayOrderId])
+  @@index([razorpayPaymentId])
+  @@map("payments")
+}
+
+model ProductClick {
+  id        String   @id @default(cuid())
+  productId String   @map("product_id")
+  ip        String   @default("")
+  userAgent String   @default("") @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@index([createdAt])
+  @@map("product_clicks")
 }

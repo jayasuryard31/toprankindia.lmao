@@ -1,4 +1,4 @@
-const RESPONSE = require("./Response");
+const RESPONSE = require("./response");
 
 const result = (key, responseData = null) => {
   const entry = RESPONSE[key] || RESPONSE.SERVER_ERROR;

@@ -31,6 +31,10 @@ const RESPONSE = {
     code: 1007,
     message: "Something went wrong"
   },
+  PAYMENT_FAILED: {
+    code: 1008,
+    message: "Payment verification failed"
+  },
 };
 
 module.exports = RESPONSE;
