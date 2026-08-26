@@ -1,21 +1,35 @@
 import { useState, useMemo } from "react";
 import { useCategories } from "../../hooks/useCategories";
+import { useProducts } from "../../hooks/useProducts";
 import { usePayment } from "../../hooks/usePayment";
 import { useToast } from "../../context/ToastContext";
 import { formatINR } from "../../utils/formatINR";
 import { isValidUrl, isValidAmount, formatUrlInput, extractHostname, getFaviconUrl } from "../../utils/validation";
-import { IconGlobe, IconShield, IconArrowUpRight, IconCheck } from "../common/Icons";
+import { IconGlobe, IconArrowUpRight, IconCheck } from "../common/Icons";
 
 export default function BidBar({ onPaymentSuccess }) {
   const toast = useToast();
   const { data: categories } = useCategories();
   const { createOrder, verifyPayment } = usePayment();
 
+  // Analyze the #1 top product to determine the exact bid required to earn Rank #1
+  const { data: topProductsData } = useProducts({
+    limit: 1,
+    sort: "rank",
+    period: "all",
+  });
+
+  const top1Product = topProductsData?.data?.[0];
+  const top1Amount = top1Product?.currentAmount ?? 4000;
+  const claimTop1Amount = top1Amount + 1; // e.g. 4001 to claim #1 rank
+
   const [url, setUrl] = useState("");
   const [categoryId, setCategoryId] = useState("");
-  const [amount, setAmount] = useState("");
+  const [userAmount, setUserAmount] = useState(null);
   const [loading, setLoading] = useState(false);
   const [faviconError, setFaviconError] = useState(false);
+
+  const amount = userAmount !== null ? userAmount : String(claimTop1Amount);
 
   const detectedHost = useMemo(() => extractHostname(url), [url]);
   const faviconUrl = useMemo(() => {
@@ -84,7 +98,7 @@ export default function BidBar({ onPaymentSuccess }) {
             toast.success("Your building has risen in the city skyline!");
             setUrl("");
             setCategoryId("");
-            setAmount("");
+            setUserAmount(null);
 
             if (onPaymentSuccess && result.product) {
               onPaymentSuccess(result.product);
@@ -159,7 +173,7 @@ export default function BidBar({ onPaymentSuccess }) {
             </select>
           </div>
 
-          {/* Amount Input */}
+          {/* Amount Input with Default #1 Winning Bid (e.g. 4001) */}
           <div className="relative w-full md:w-36">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono font-bold text-xs text-muted">
               ₹
@@ -167,12 +181,12 @@ export default function BidBar({ onPaymentSuccess }) {
             <input
               type="number"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="Amount"
+              onChange={(e) => setUserAmount(e.target.value)}
+              placeholder={String(claimTop1Amount)}
               min="1"
               step="1"
               required
-              className="w-full pl-7 pr-3 py-2 bg-surface/90 dark:bg-surface/90 border border-border/70 rounded-xl font-mono text-xs text-charcoal dark:text-cream placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-coral/30"
+              className="w-full pl-7 pr-3 py-2 bg-surface/90 dark:bg-surface/90 border border-border/70 rounded-xl font-mono text-xs font-bold text-charcoal dark:text-cream placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-coral/30"
             />
           </div>
 
@@ -187,11 +201,13 @@ export default function BidBar({ onPaymentSuccess }) {
           </button>
         </form>
 
-        {/* Microcopy & Detected Domain Bar */}
+        {/* Microcopy with #1 Rank Target Info */}
         <div className="flex items-center justify-between mt-1.5 px-2 text-[10px] text-muted">
-          <div className="flex items-center gap-1">
-            <IconShield className="w-3 h-3 text-coral" />
-            <span>No minimum bid. You decide the height of your building.</span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-1 font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-md">
+              👑 ₹{claimTop1Amount.toLocaleString("en-IN")}
+            </span>
+            <span>to claim #1 Rank (editable amount)</span>
           </div>
 
           {detectedHost && detectedHost.includes(".") && (
@@ -205,4 +221,3 @@ export default function BidBar({ onPaymentSuccess }) {
     </div>
   );
 }
-

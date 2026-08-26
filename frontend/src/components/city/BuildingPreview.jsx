@@ -118,8 +118,13 @@ export default function BuildingPreview({ product, onClose, onOutbidSuccess }) {
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
-              Building Landmark
+              {product.district || "Metropolis Landmark"}
             </span>
+            {product.plotNumber && (
+              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-coral/10 text-coral border border-coral/20">
+                {product.plotNumber}
+              </span>
+            )}
           </div>
 
           <button

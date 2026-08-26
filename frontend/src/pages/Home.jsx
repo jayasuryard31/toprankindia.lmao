@@ -3,7 +3,6 @@ import { useHome } from "../hooks/useHome";
 import { useProducts } from "../hooks/useProducts";
 import { useCategories } from "../hooks/useCategories";
 import CityCanvas from "../components/city/CityCanvas";
-import BuildingPreview from "../components/city/BuildingPreview";
 import MapControls from "../components/city/MapControls";
 import BidBar from "../components/panels/BidBar";
 import LeftSidebar from "../components/panels/LeftSidebar";
@@ -106,9 +105,10 @@ export default function Home() {
           onClearFocus={() => setFocusedBuildingId(null)}
           viewMode={viewMode}
           onToggleViewMode={handleToggleViewMode}
+          onOutbidSuccess={handlePaymentSuccess}
         />
 
-        {/* 3. Floating Left Sidebar (Metropolis Stats, District Filters & Live Activity) */}
+        {/* 3. Floating Left Sidebar (Velora Harbor Stats, District Filters & Live Activity) */}
         <div className="absolute top-20 left-4 md:left-6 z-20 hidden md:block pointer-events-none">
           <div className="pointer-events-auto">
             <LeftSidebar
@@ -135,15 +135,6 @@ export default function Home() {
             />
           </div>
         </div>
-
-        {/* 5. Floating Selected Building Details Preview */}
-        {selectedProduct && (
-          <BuildingPreview
-            product={selectedProduct}
-            onClose={() => setSelectedProduct(null)}
-            onOutbidSuccess={handlePaymentSuccess}
-          />
-        )}
 
         {/* 6. Bottom Floating Status Metrics (Hidden on Mobile) */}
         <div className="hidden sm:block">

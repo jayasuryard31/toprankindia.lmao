@@ -37,17 +37,18 @@ export default function LeftSidebar({
 
   return (
     <div className="w-64 sm:w-72 flex-shrink-0 flex flex-col gap-3 max-h-[calc(100vh-140px)] overflow-y-auto scrollbar-hide select-none pointer-events-auto">
-      {/* 1. Metropolis Overview Card */}
+      {/* 1. Velora Harbor Overview Card */}
       <div className="glass-panel p-4 rounded-3xl shadow-feather border border-border/80">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-1">
           <span className="font-bold text-xs uppercase tracking-wider text-charcoal dark:text-cream">
-            The Metropolis
+            Velora Harbor
           </span>
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-bold">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             LIVE
           </span>
         </div>
+        <p className="text-[10px] text-muted mb-3 font-medium">Coastal Bidding Metropolis</p>
 
         <div className="grid grid-cols-3 gap-2 text-center pt-1 border-t border-border/50">
           <div>
