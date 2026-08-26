@@ -1,41 +1,48 @@
-import { useState } from 'react'
-import { addNumbers } from '../api'
-import './App.css'
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ThemeProvider } from "./context/ThemeContext";
+import { ToastProvider } from "./context/ToastContext";
+import ErrorBoundary from "./components/common/ErrorBoundary";
+import Header from "./components/layout/Header";
+import Footer from "./components/layout/Footer";
+import Home from "./pages/Home";
+import ProductDetails from "./pages/ProductDetails";
+import Categories from "./pages/Categories";
+import CategoryDetails from "./pages/CategoryDetails";
+import About from "./pages/About";
+import NotFound from "./pages/NotFound";
 
-function App() {
-  const [a, setA] = useState('')
-  const [b, setB] = useState('')
-  const [result, setResult] = useState(null)
-  const [error, setError] = useState(null)
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: 1, refetchOnWindowFocus: false },
+  },
+});
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError(null)
-    setResult(null)
-    try {
-      const data = await addNumbers(Number(a), Number(b))
-      setResult(data.result)
-    } catch (err) {
-      setError(err.message)
-    }
-  }
-
+export default function App() {
   return (
-    <>
-      <h1 class="text-3xl font-bold underline">
-        Hello world!
-      </h1>
-
-      <form onSubmit={handleSubmit}>
-        <input type="number" value={a} onChange={(e) => setA(e.target.value)} placeholder="a" required />
-        <input type="number" value={b} onChange={(e) => setB(e.target.value)} placeholder="b" required />
-        <button type="submit">Add</button>
-      </form>
-
-      {result !== null && <p>Result: {result}</p>}
-      {error && <p>Error: {error}</p>}
-    </>
-  )
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <ToastProvider>
+            <BrowserRouter>
+              <div className="min-h-screen flex flex-col bg-background text-charcoal dark:text-cream">
+                <Header />
+                <main className="flex-1">
+                  <Routes>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/products/:id" element={<ProductDetails />} />
+                    <Route path="/categories" element={<Categories />} />
+                    <Route path="/categories/:categoryId" element={<CategoryDetails />} />
+                    <Route path="/about" element={<About />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </main>
+                <Footer />
+              </div>
+            </BrowserRouter>
+          </ToastProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
+  );
 }
-
-export default App
