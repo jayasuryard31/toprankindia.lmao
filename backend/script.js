@@ -15,6 +15,9 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 
+// Trust reverse proxy (Render, Vercel, Cloudflare, etc.) for client IP & rate limiting
+app.set("trust proxy", 1);
+
 setupGameSocket(server);
 
 app.use(helmet());
