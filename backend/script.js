@@ -19,21 +19,29 @@ setupGameSocket(server);
 
 app.use(helmet());
 
-const allowedOrigins = ["https://toprankindia.vercel.app"];
-app.use(cors({
+const rawFrontendUrls = process.env.FRONTEND_URLS || process.env.FRONTEND_URL || "";
+const allowedOrigins = rawFrontendUrls
+  .replace(/^\[|\]$/g, "")
+  .split(",")
+  .map((url) => url.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
+
+const corsOptions = {
   origin(origin, cb) {
     if (!origin) return cb(null, true);
-    if (allowedOrigins.includes(origin)) return cb(null, true);
+    const normalizedOrigin = origin.trim().replace(/\/+$/, "");
+    if (allowedOrigins.includes(normalizedOrigin)) return cb(null, true);
     // Allow any localhost / 127.0.0.1 port during local development.
-    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return cb(null, true);
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalizedOrigin)) return cb(null, true);
     return cb(null, false);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-}));
+};
 
-app.options("*", cors());
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
