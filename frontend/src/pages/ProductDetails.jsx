@@ -5,9 +5,9 @@ import { useProduct } from "../hooks/useProducts";
 import { usePayment } from "../hooks/usePayment";
 import { useToast } from "../context/ToastContext";
 import { formatINR } from "../utils/formatINR";
+import { useCurrency } from "../context/CurrencyContext";
 import { timeAgo } from "../utils/formatDate";
 import { trackClick } from "../services/productsApi";
-import { isValidAmount } from "../utils/validation";
 import LogoFallback from "../components/common/LogoFallback";
 import Skeleton from "../components/common/Skeleton";
 import ErrorState from "../components/common/ErrorState";
@@ -36,6 +36,7 @@ export default function ProductDetails() {
 
   const { data: product, isLoading, error, refetch } = useProduct(id);
   const { createOrder, verifyPayment } = usePayment();
+  const { symbol, currency, toINR, format } = useCurrency();
 
   const [outbidOpen, setOutbidOpen] = useState(false);
   const [inlineAmount, setInlineAmount] = useState("");
@@ -73,8 +74,9 @@ export default function ProductDetails() {
     });
 
   const triggerPayment = async (amtToPay) => {
-    if (!isValidAmount(amtToPay)) {
-      toast.error("Please enter a valid amount in INR (minimum ₹1)");
+    const amountINR = toINR(amtToPay);
+    if (!(Number(amtToPay) > 0) || amountINR < 1) {
+      toast.error(`Please enter a valid bid amount in ${currency}`);
       return;
     }
 
@@ -85,7 +87,7 @@ export default function ProductDetails() {
       const order = await createOrder.mutateAsync({
         websiteUrl: product.websiteUrl,
         categoryId: product.category?.id || 15,
-        amount: Number(amtToPay),
+        amount: amountINR,
       });
 
       const loaded = await loadRazorpay();
@@ -102,7 +104,7 @@ export default function ProductDetails() {
         amount: order.amount * 100,
         currency: order.currency || "INR",
         name: "TopRankIndia",
-        description: `Rank ${product.websiteName} for ${formatINR(order.amount)}`,
+        description: `Rank ${product.websiteName} for ${format(order.amount)}`,
         order_id: order.orderId,
         handler: async (response) => {
           setOutbidLoading(true);
@@ -228,7 +230,7 @@ export default function ProductDetails() {
       action: "Website added to the leaderboard",
       rank: "",
       time: timeAgo(product.createdAt),
-      amount: "₹0",
+      amount: formatINR(0),
       iconBg: "bg-blue-500/10 text-blue-600",
       icon: "+",
     },
@@ -509,7 +511,7 @@ export default function ProductDetails() {
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-mono font-bold text-sm text-stone-400">
-                    ₹
+                    {symbol.trim()}
                   </span>
                   <input
                     type="number"
@@ -647,11 +649,11 @@ export default function ProductDetails() {
           >
             <div>
               <label className="text-[11px] font-bold uppercase tracking-wider text-muted block mb-1 px-1">
-                Your Amount (INR)
+                Your Amount ({currency})
               </label>
               <div className="relative">
                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-charcoal dark:text-cream font-mono font-bold text-sm">
-                  ₹
+                  {symbol.trim()}
                 </span>
                 <input
                   type="number"

@@ -8,6 +8,8 @@ export default function RightSidebar({
   topProducts = [],
   onSelectProduct,
   recentActivity = [],
+  showLiveFeed = true,
+  showTopEmpires = true,
 }) {
   const activityList = recentActivity.length > 0 ? recentActivity : [
     { id: "1", websiteName: "Brown Noise", amount: 500, createdAt: new Date() },
@@ -17,8 +19,9 @@ export default function RightSidebar({
   ];
 
   return (
-    <div className="w-64 sm:w-80 flex-shrink-0 flex flex-col gap-3 max-h-[calc(100vh-140px)] overflow-y-auto scrollbar-hide select-none pointer-events-auto">
+    <div className="flex flex-col gap-3 select-none pointer-events-auto">
       {/* 1. Live Feed */}
+      {showLiveFeed && (
       <div className="glass-panel p-4 rounded-3xl shadow-feather border border-border/80">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1.5">
@@ -70,8 +73,11 @@ export default function RightSidebar({
           })}
         </div>
       </div>
+      )}
 
       {/* 2. Top Empires Leaderboard */}
+      {showTopEmpires && (
+      <>
       <div className="glass-panel p-4 rounded-3xl shadow-feather border border-border/80">
         <div className="flex items-center justify-between mb-3 px-1">
           <div className="flex items-center gap-1.5">
@@ -206,6 +212,8 @@ export default function RightSidebar({
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

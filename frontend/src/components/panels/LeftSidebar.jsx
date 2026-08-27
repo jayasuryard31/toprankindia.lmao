@@ -34,7 +34,7 @@ export default function LeftSidebar({
   };
 
   return (
-    <div className="w-64 sm:w-72 flex-shrink-0 flex flex-col gap-3 max-h-[calc(100vh-140px)] overflow-y-auto scrollbar-hide select-none pointer-events-auto">
+    <div className="w-full flex flex-col gap-3 select-none pointer-events-auto">
       {/* 1. Velora Harbor Overview Card */}
       <div className="glass-panel p-4 rounded-3xl shadow-feather border border-border/80">
         <div className="flex items-center justify-between mb-1">

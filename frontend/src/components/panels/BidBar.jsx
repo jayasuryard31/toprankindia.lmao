@@ -3,14 +3,15 @@ import { useCategories } from "../../hooks/useCategories";
 import { useProducts } from "../../hooks/useProducts";
 import { usePayment } from "../../hooks/usePayment";
 import { useToast } from "../../context/ToastContext";
-import { formatINR } from "../../utils/formatINR";
-import { isValidUrl, isValidAmount, formatUrlInput, extractHostname, getFaviconUrl } from "../../utils/validation";
+import { useCurrency } from "../../context/CurrencyContext";
+import { isValidUrl, formatUrlInput, extractHostname, getFaviconUrl } from "../../utils/validation";
 import { IconGlobe, IconArrowUpRight, IconCheck } from "../common/Icons";
 
 export default function BidBar({ onPaymentSuccess }) {
   const toast = useToast();
   const { data: categories } = useCategories();
   const { createOrder, verifyPayment } = usePayment();
+  const { symbol, currency, fromINR, toINR, format } = useCurrency();
 
   // Analyze the #1 top product to determine the exact bid required to earn Rank #1
   const { data: topProductsData } = useProducts({
@@ -20,8 +21,9 @@ export default function BidBar({ onPaymentSuccess }) {
   });
 
   const top1Product = topProductsData?.data?.[0];
-  const top1Amount = top1Product?.currentAmount ?? 4000;
-  const claimTop1Amount = top1Amount + 1; // e.g. 4001 to claim #1 rank
+  const top1AmountINR = top1Product?.currentAmount ?? 4000;
+  // Smallest bid (in the display currency) that beats the current #1.
+  const claimAmount = Math.max(1, Math.ceil(fromINR(top1AmountINR)) + 1);
 
   const [url, setUrl] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -29,7 +31,7 @@ export default function BidBar({ onPaymentSuccess }) {
   const [loading, setLoading] = useState(false);
   const [faviconError, setFaviconError] = useState(false);
 
-  const amount = userAmount !== null ? userAmount : String(claimTop1Amount);
+  const amount = userAmount !== null ? userAmount : String(claimAmount);
 
   const detectedHost = useMemo(() => extractHostname(url), [url]);
   const faviconUrl = useMemo(() => {
@@ -57,8 +59,9 @@ export default function BidBar({ onPaymentSuccess }) {
       toast.error("Please choose a category for your building");
       return;
     }
-    if (!isValidAmount(amount)) {
-      toast.error("Please enter a valid amount in INR (minimum ₹1)");
+    const amountINR = toINR(amount);
+    if (!(Number(amount) > 0) || amountINR < 1) {
+      toast.error(`Please enter a valid bid amount in ${currency}`);
       return;
     }
 
@@ -69,7 +72,7 @@ export default function BidBar({ onPaymentSuccess }) {
       const order = await createOrder.mutateAsync({
         websiteUrl: cleanUrl,
         categoryId: Number(categoryId),
-        amount: Number(amount),
+        amount: amountINR,
       });
 
       const loaded = await loadRazorpay();
@@ -84,7 +87,7 @@ export default function BidBar({ onPaymentSuccess }) {
         amount: order.amount * 100,
         currency: order.currency || "INR",
         name: "TopRankIndia City",
-        description: `Build skyline spot for ${formatINR(order.amount)}`,
+        description: `Build skyline spot for ${format(order.amount)}`,
         order_id: order.orderId,
         handler: async (response) => {
           setLoading(true);
@@ -176,13 +179,13 @@ export default function BidBar({ onPaymentSuccess }) {
           {/* Amount Input with Default #1 Winning Bid (e.g. 4001) */}
           <div className="relative w-full md:w-36">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono font-bold text-xs text-muted">
-              ₹
+              {symbol.trim()}
             </span>
             <input
               type="number"
               value={amount}
               onChange={(e) => setUserAmount(e.target.value)}
-              placeholder={String(claimTop1Amount)}
+              placeholder={String(claimAmount)}
               min="1"
               step="1"
               required
@@ -205,9 +208,9 @@ export default function BidBar({ onPaymentSuccess }) {
         <div className="flex items-center justify-between mt-1.5 px-2 text-[10px] text-muted">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="inline-flex items-center gap-1 font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-md">
-              👑 ₹{claimTop1Amount.toLocaleString("en-IN")}
+              👑 {symbol.trim()}{claimAmount.toLocaleString()}
             </span>
-            <span>to claim #1 Rank (editable amount)</span>
+            <span>to claim #1 Rank (editable · billed in {currency})</span>
           </div>
 
           {detectedHost && detectedHost.includes(".") && (

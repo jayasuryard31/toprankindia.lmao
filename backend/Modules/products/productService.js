@@ -1,6 +1,7 @@
 const prisma = require("../../Config/DBConnect");
 const { CATEGORIES } = require("../../Globals/constants");
 const { normalizeUrl } = require("../../Utils/urlNormalizer");
+const { resolvePlot } = require("../map/mapService");
 
 // ── Repository ──────────────────────────────────────────
 
@@ -157,6 +158,7 @@ function formatProduct(product, categoryRank, allTimeRank) {
     currency: product.currency,
     categoryRank,
     allTimeRank,
+    plot: resolvePlot(product, allTimeRank || 1),
     clickCount: product.clickCount,
     totalBids: product.totalPayments,
     createdAt: product.createdAt,
@@ -196,6 +198,7 @@ async function getTopProducts(limit = 3) {
   const products = await findTopProducts(limit);
   return products.map((p, i) => ({
     rank: i + 1,
+    plot: resolvePlot(p, i + 1),
     id: p.id,
     websiteName: p.websiteName,
     websiteUrl: p.websiteUrl,

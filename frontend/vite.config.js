@@ -10,4 +10,16 @@ export default defineConfig({
     react(),
     babel({ presets: [reactCompilerPreset()] })
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Keep three.js (+ its examples/addons) in a dedicated, separately
+        // cacheable chunk instead of inlining it into the map bundle.
+        manualChunks(id) {
+          if (id.includes("node_modules/three/")) return "vendor-three";
+          if (id.includes("node_modules/maplibre-gl/")) return "vendor-maplibre";
+        },
+      },
+    },
+  },
 })

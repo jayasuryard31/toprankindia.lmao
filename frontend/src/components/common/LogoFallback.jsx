@@ -1,4 +1,14 @@
-export default function LogoFallback({ name = "", className = "" }) {
+import { useState } from "react";
+
+export default function LogoFallback({
+  src = "",
+  name = "",
+  size = 36,
+  className = "",
+  alt = "",
+}) {
+  const [error, setError] = useState(false);
+
   const initials = (name || "?")
     .trim()
     .split(/\s+/)
@@ -7,14 +17,12 @@ export default function LogoFallback({ name = "", className = "" }) {
     .join("")
     .toUpperCase();
 
-  // Deterministic palette based on name
   const palettes = [
-    "from-orange-100 to-amber-100 text-orange-700 border-orange-200/60 dark:from-orange-950/60 dark:to-amber-950/40 dark:text-orange-300 dark:border-orange-900/40",
-    "from-indigo-100 to-purple-100 text-indigo-700 border-indigo-200/60 dark:from-indigo-950/60 dark:to-purple-950/40 dark:text-indigo-300 dark:border-indigo-900/40",
-    "from-emerald-100 to-teal-100 text-emerald-700 border-emerald-200/60 dark:from-emerald-950/60 dark:to-teal-950/40 dark:text-emerald-300 dark:border-emerald-900/40",
-    "from-rose-100 to-pink-100 text-rose-700 border-rose-200/60 dark:from-rose-950/60 dark:to-pink-950/40 dark:text-rose-300 dark:border-rose-900/40",
-    "from-sky-100 to-blue-100 text-sky-700 border-sky-200/60 dark:from-sky-950/60 dark:to-blue-950/40 dark:text-sky-300 dark:border-sky-900/40",
-    "from-violet-100 to-fuchsia-100 text-violet-700 border-violet-200/60 dark:from-violet-950/60 dark:to-fuchsia-950/40 dark:text-violet-300 dark:border-violet-900/40",
+    "from-orange-500/20 to-amber-500/10 text-orange-600 dark:text-orange-300 border-orange-200 dark:border-orange-800/40",
+    "from-indigo-500/20 to-purple-500/10 text-indigo-600 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/40",
+    "from-emerald-500/20 to-teal-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/40",
+    "from-rose-500/20 to-pink-500/10 text-rose-600 dark:text-rose-300 border-rose-200 dark:border-rose-800/40",
+    "from-sky-500/20 to-blue-500/10 text-sky-600 dark:text-sky-300 border-sky-200 dark:border-sky-800/40",
   ];
 
   let hash = 0;
@@ -23,9 +31,24 @@ export default function LogoFallback({ name = "", className = "" }) {
   }
   const selectedPalette = palettes[Math.abs(hash) % palettes.length];
 
+  if (src && !error) {
+    return (
+      <img
+        src={src}
+        alt={alt || name}
+        onError={() => setError(true)}
+        className={`w-full h-full object-contain max-h-full max-w-full rounded-lg ${className}`}
+        style={{ maxHeight: `${size}px`, maxWidth: `${size * 2}px` }}
+        loading="lazy"
+        decoding="async"
+      />
+    );
+  }
+
   return (
     <div
-      className={`flex items-center justify-center font-bold tracking-tight bg-gradient-to-br border select-none shadow-sm ${selectedPalette} ${className}`}
+      className={`flex items-center justify-center font-black tracking-tight rounded-xl bg-gradient-to-br border select-none shadow-xs ${selectedPalette} ${className}`}
+      style={{ width: `${size}px`, height: `${size}px`, fontSize: `${Math.max(10, size * 0.42)}px` }}
     >
       <span>{initials || "TRI"}</span>
     </div>

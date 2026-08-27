@@ -86,12 +86,55 @@ async function fetchMetadata(websiteUrl) {
   const metaDescription = $('meta[name="description"]').attr("content") || "";
   const description = ogDescription || metaDescription || "";
 
-  const ogImage = $('meta[property="og:image"]').attr("content") || "";
-  const appleTouchIcon = $('link[rel="apple-touch-icon"]').attr("href") || "";
-  const favicon = $('link[rel="icon"]').attr("href") || "";
+  // 1. Scrape header / nav / logo images directly from index.html
+  let indexHtmlLogo = "";
+  const logoSelectors = [
+    'header img[src*="logo" i]',
+    'nav img[src*="logo" i]',
+    '.logo img',
+    '#logo img',
+    '[class*="logo"] img',
+    '[id*="logo"] img',
+    'a.brand img',
+    'a.navbar-brand img',
+    'header img',
+    'nav img',
+    'img[alt*="logo" i]',
+    'img[src*="logo" i]',
+    'img[src*="brand" i]',
+  ];
 
-  const logoUrl = resolveUrl(websiteUrl, ogImage || appleTouchIcon || favicon) || "";
-  const faviconUrl = resolveUrl(websiteUrl, favicon) || "";
+  for (const selector of logoSelectors) {
+    const el = $(selector).first();
+    const candidate = el.attr("src") || el.attr("data-src") || el.attr("data-lazy-src");
+    if (candidate && !candidate.startsWith("data:image/svg+xml;base64,PHN2ZyB3aWR0aD")) {
+      indexHtmlLogo = candidate;
+      break;
+    }
+  }
+
+  // 2. Open Graph & Twitter hero images
+  const ogImage = $('meta[property="og:image"]').attr("content") ||
+    $('meta[property="og:image:secure_url"]').attr("content") ||
+    $('meta[name="twitter:image"]').attr("content") ||
+    $('meta[name="twitter:image:src"]').attr("content") ||
+    $('link[rel="image_src"]').attr("href") || "";
+
+  // 3. Apple Touch Icons & High-Res Icons
+  const appleTouchIcon = $('link[rel="apple-touch-icon"]').attr("href") ||
+    $('link[rel="apple-touch-icon-precomposed"]').attr("href") ||
+    $('link[rel="icon"][sizes*="192"]').attr("href") ||
+    $('link[rel="icon"][sizes*="180"]').attr("href") ||
+    $('link[rel="icon"][sizes*="128"]').attr("href") ||
+    $('link[rel="icon"]').attr("href") || "";
+
+  // 4. Hero / Banner image in index.html body
+  const heroImage = $('[class*="hero"] img, [class*="banner"] img, main img, section img').first().attr("src") || "";
+
+  // Resolve best logo / image from index.html
+  const bestImage = indexHtmlLogo || ogImage || appleTouchIcon || heroImage;
+  const logoUrl = resolveUrl(websiteUrl, bestImage) || "";
+  const faviconUrl = resolveUrl(websiteUrl, appleTouchIcon || $('link[rel="icon"]').attr("href") || "/favicon.ico") || "";
 
   return {
     websiteName,

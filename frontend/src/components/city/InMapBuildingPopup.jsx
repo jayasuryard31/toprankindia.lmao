@@ -3,9 +3,9 @@ import { Link } from "react-router-dom";
 import { useProducts } from "../../hooks/useProducts";
 import { usePayment } from "../../hooks/usePayment";
 import { useToast } from "../../context/ToastContext";
+import { useCurrency } from "../../context/CurrencyContext";
 import { formatINR } from "../../utils/formatINR";
 import { trackClick } from "../../services/productsApi";
-import { isValidAmount } from "../../utils/validation";
 import LogoFallback from "../common/LogoFallback";
 import Modal from "../common/Modal";
 import { IconX, IconArrowUpRight, IconZap, IconShield, IconSparkle } from "../common/Icons";
@@ -18,6 +18,7 @@ export default function InMapBuildingPopup({
 }) {
   const toast = useToast();
   const { createOrder, verifyPayment } = usePayment();
+  const { symbol, currency, fromINR, toINR, format } = useCurrency();
 
   // Determine top #1 product amount dynamically to claim rank 1
   const { data: topProductsData } = useProducts({
@@ -26,12 +27,14 @@ export default function InMapBuildingPopup({
     period: "all",
   });
   const top1Product = topProductsData?.data?.[0];
-  const top1Amount = top1Product?.currentAmount ?? 4000;
-  const claimTop1Amount = top1Amount + 1; // e.g. 4001
+  const top1AmountINR = top1Product?.currentAmount ?? 4000;
+  const claimAmount = Math.max(1, Math.ceil(fromINR(top1AmountINR)) + 1); // display currency
 
   const [outbidOpen, setOutbidOpen] = useState(false);
-  const [outbidAmount, setOutbidAmount] = useState(String(claimTop1Amount));
+  const [userOutbid, setUserOutbid] = useState(null);
   const [loading, setLoading] = useState(false);
+  const outbidAmount = userOutbid !== null ? userOutbid : String(claimAmount);
+  const setOutbidAmount = setUserOutbid;
 
   if (!building || !screenPos) return null;
 
@@ -62,8 +65,9 @@ export default function InMapBuildingPopup({
 
   const handleOutbidSubmit = async (e) => {
     e.preventDefault();
-    if (!isValidAmount(outbidAmount)) {
-      toast.error("Please enter a valid amount in INR (minimum ₹1)");
+    const amountINR = toINR(outbidAmount);
+    if (!(Number(outbidAmount) > 0) || amountINR < 1) {
+      toast.error(`Please enter a valid bid amount in ${currency}`);
       return;
     }
 
@@ -72,7 +76,7 @@ export default function InMapBuildingPopup({
       const order = await createOrder.mutateAsync({
         websiteUrl: product.websiteUrl,
         categoryId: product.category?.id || 15,
-        amount: Number(outbidAmount),
+        amount: amountINR,
       });
 
       const loaded = await loadRazorpay();
@@ -87,7 +91,7 @@ export default function InMapBuildingPopup({
         amount: order.amount * 100,
         currency: order.currency || "INR",
         name: "TopRankIndia City",
-        description: `Boost ${product.websiteName} to ${formatINR(order.amount)}`,
+        description: `Boost ${product.websiteName} to ${format(order.amount)}`,
         order_id: order.orderId,
         handler: async (response) => {
           setLoading(true);
@@ -100,7 +104,7 @@ export default function InMapBuildingPopup({
 
             toast.success("Tower upgraded to new height!");
             setOutbidOpen(false);
-            setOutbidAmount(String(claimTop1Amount));
+            setUserOutbid(null);
             if (onOutbidSuccess && result.product) {
               onOutbidSuccess(result.product);
             }
@@ -196,7 +200,7 @@ export default function InMapBuildingPopup({
           <div>
             <span className="text-[9px] text-muted uppercase font-bold block mb-0.5">Bid Value</span>
             <span className="font-mono text-xs font-black text-emerald-600 dark:text-emerald-400 truncate block">
-              ₹{(product.currentAmount || 0).toLocaleString("en-IN")}
+              {formatINR(product.currentAmount || 0)}
             </span>
           </div>
         </div>
@@ -206,7 +210,7 @@ export default function InMapBuildingPopup({
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => {
-                setOutbidAmount(String(claimTop1Amount));
+                setUserOutbid(null);
                 setOutbidOpen(true);
               }}
               className="flex-1 py-2 px-3 rounded-xl bg-coral hover:bg-coral-dark text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
@@ -251,15 +255,15 @@ export default function InMapBuildingPopup({
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-xs font-semibold text-charcoal dark:text-cream">
-                Bidding Amount (₹ INR)
+                Bidding Amount ({currency})
               </label>
               <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                👑 ₹{claimTop1Amount.toLocaleString("en-IN")} to claim #1
+                👑 {symbol.trim()}{claimAmount.toLocaleString()} to claim #1
               </span>
             </div>
             <div className="relative">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-mono font-bold text-muted">
-                ₹
+                {symbol.trim()}
               </span>
               <input
                 type="number"
@@ -267,7 +271,7 @@ export default function InMapBuildingPopup({
                 step="1"
                 value={outbidAmount}
                 onChange={(e) => setOutbidAmount(e.target.value)}
-                placeholder={String(claimTop1Amount)}
+                placeholder={String(claimAmount)}
                 className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-surface-soft dark:bg-elevated border border-border focus:border-coral focus:outline-none font-mono text-sm font-bold"
                 required
                 autoFocus
@@ -281,16 +285,16 @@ export default function InMapBuildingPopup({
           <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
-              onClick={() => setOutbidAmount(String(claimTop1Amount))}
+              onClick={() => setOutbidAmount(String(claimAmount))}
               className="flex-1 min-w-[120px] py-1.5 text-xs font-mono font-bold rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors"
             >
-              👑 Claim #1 (₹{claimTop1Amount.toLocaleString("en-IN")})
+              👑 Claim #1 ({symbol.trim()}{claimAmount.toLocaleString()})
             </button>
-            {[100, 500, 1000].map((add) => (
+            {[5, 25, 100].map((add) => (
               <button
                 key={add}
                 type="button"
-                onClick={() => setOutbidAmount(String((product.currentAmount || 0) + add))}
+                onClick={() => setOutbidAmount(String(Math.ceil(fromINR(product.currentAmount || 0)) + add))}
                 className="px-2.5 py-1.5 text-xs font-mono font-semibold rounded-lg bg-surface-soft dark:bg-elevated hover:bg-coral/10 hover:text-coral transition-colors"
               >
                 +{add}
@@ -312,7 +316,7 @@ export default function InMapBuildingPopup({
               className="flex-1 py-2.5 px-4 rounded-xl bg-coral hover:bg-coral-dark text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
             >
               <IconShield className="w-3.5 h-3.5" />
-              <span>{loading ? "Processing..." : `Pay ${outbidAmount ? formatINR(Number(outbidAmount)) : ""} & Boost`}</span>
+              <span>{loading ? "Processing..." : `Pay ${outbidAmount ? symbol.trim() + Number(outbidAmount).toLocaleString() : ""} & Boost`}</span>
             </button>
           </div>
         </form>

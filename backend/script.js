@@ -1,5 +1,6 @@
 require("dotenv").config();
 
+const http = require("http");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -8,17 +9,25 @@ const rateLimit = require("express-rate-limit");
 const routeIndex = require("./routeIndex");
 const { errorHandler } = require("./Middleware/errorHandler");
 const ApiResponse = require("./Globals/ApiResponse");
+const { setupGameSocket } = require("./Modules/game/gameSocket");
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 
+setupGameSocket(server);
+
 app.use(helmet());
+
+const allowedOrigins = ["https://toprankindia.vercel.app"];
 app.use(cors({
-  origin: [
-    "https://toprankindia.vercel.app",
-    "http://localhost:3000",
-    "http://localhost:5173",
-  ],
+  origin(origin, cb) {
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    // Allow any localhost / 127.0.0.1 port during local development.
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return cb(null, true);
+    return cb(null, false);
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
@@ -66,6 +75,6 @@ app.get("/api/health", (req, res) => {
 
 app.use(errorHandler);
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });

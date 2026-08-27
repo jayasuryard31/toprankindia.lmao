@@ -1,9 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
 import { useHome } from "../hooks/useHome";
 import { useProducts } from "../hooks/useProducts";
 import { useCategories } from "../hooks/useCategories";
-import CityCanvas from "../components/city/CityCanvas";
-import MapControls from "../components/city/MapControls";
+import MapControls from "../components/map/MapControls";
+import MapViewToggle from "../components/map/MapViewToggle";
+import MapLegend from "../components/map/MapLegend";
+import PanelToggles from "../components/map/PanelToggles";
+import CurrencySelector from "../components/map/CurrencySelector";
+import { useMapStore } from "../components/map/useMapStore";
 import BidBar from "../components/panels/BidBar";
 import LeftSidebar from "../components/panels/LeftSidebar";
 import RightSidebar from "../components/panels/RightSidebar";
@@ -12,70 +16,67 @@ import MobileNav from "../components/layout/MobileNav";
 import CommandSearch from "../components/common/CommandSearch";
 import ErrorState from "../components/common/ErrorState";
 
+// The 3D city (three.js + engine + in-city game layer) is a large chunk — load
+// it after the page shell so the dashboard/nav/panels paint immediately.
+const MapCanvas = lazy(() => import("../components/map/MapCanvas"));
+// MiniMap pulls maplibre-gl (~250KB gz) — only load it when the overview panel
+// is actually shown.
+const MiniMap = lazy(() => import("../components/map/MiniMap"));
+
+function MapLoading() {
+  return (
+    <div className="absolute inset-0 z-0 flex items-center justify-center bg-[#F1EEE6] dark:bg-[#14171C]">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-7 w-7 rounded-full border-2 border-coral/30 border-t-coral animate-spin" />
+        <span className="text-[11px] font-mono uppercase tracking-[0.25em] text-muted">
+          Building Velora Harbor
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const { data: homeData, error: homeError, refetch: refetchHome } = useHome();
   const { data: categories } = useCategories();
 
   const [activeCategoryId, setActiveCategoryId] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [focusedBuildingId, setFocusedBuildingId] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [viewMode, setViewMode] = useState("2D");
   const [mobileBidOpen, setMobileBidOpen] = useState(false);
+  const [gameActive, setGameActive] = useState(false);
 
-  // Fetch all ranked products to populate city buildings
+  const panels = useMapStore((s) => s.panels);
+
   const {
     data: productsData,
     error: productsError,
     refetch: refetchProducts,
-  } = useProducts({
-    limit: 100,
-    sort: "rank",
-    period: "all",
-  });
+  } = useProducts({ limit: 100, sort: "rank", period: "all" });
 
-  const allProducts = useMemo(() => {
-    return productsData?.data || homeData?.topProducts || [];
-  }, [productsData, homeData]);
+  const allProducts = useMemo(
+    () => productsData?.data || homeData?.topProducts || [],
+    [productsData, homeData]
+  );
+  const topProducts = useMemo(() => allProducts.slice(0, 5), [allProducts]);
+  const recentActivity = useMemo(() => homeData?.recentActivity || [], [homeData]);
 
-  const topProducts = useMemo(() => {
-    return allProducts.slice(0, 5);
-  }, [allProducts]);
-
-  const recentActivity = useMemo(() => {
-    return homeData?.recentActivity || [];
-  }, [homeData]);
-
-  // Center on Top #1 building
   const handleFocusTopSpot = () => {
-    if (allProducts.length > 0) {
-      const top1 = allProducts[0];
-      setFocusedBuildingId(top1.id);
-      setSelectedProduct(top1);
-    }
+    if (allProducts.length > 0) setSelectedProduct({ ...allProducts[0] });
   };
 
-  // Toggle between 2D Top-Down and 3D Isometric View
-  const handleToggleViewMode = () => {
-    setViewMode((prev) => (prev === "2D" ? "3D" : "2D"));
-  };
-
-  // When payment succeeds, refresh and fly to the new building
   const handlePaymentSuccess = (product) => {
     refetchHome();
     refetchProducts();
     setMobileBidOpen(false);
-    if (product) {
-      setFocusedBuildingId(product.id);
-      setSelectedProduct(product);
-    }
+    if (product) setSelectedProduct({ ...product });
   };
 
   if (homeError && productsError) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-20">
         <ErrorState
-          message="Failed to connect to TopRankIndia City. Please check your connection."
+          message="Failed to connect to Velora Harbor. Please check your connection."
           onRetry={() => {
             refetchHome();
             refetchProducts();
@@ -85,31 +86,45 @@ export default function Home() {
     );
   }
 
+  const rightRailVisible =
+    panels.overview || panels.legend || panels.liveFeed || panels.topEmpires;
+
   return (
-    <div className="relative w-full h-[calc(100vh-68px)] min-h-[640px] overflow-hidden flex flex-col bg-[#F7F5F0] dark:bg-[#110F0D]">
-      {/* 1. Top Floating Bid Bar (Hidden on small mobile screens, replaced by floating bottom CTA) */}
-      <div className="absolute top-3 left-0 right-0 z-30 pointer-events-none hidden sm:block">
-        <div className="pointer-events-auto max-w-3xl mx-auto">
+    <div className="relative w-full h-[calc(100vh-68px)] min-h-[560px] overflow-hidden bg-[#F1EEE6] dark:bg-[#14171C]">
+      {/* ── Map canvas — the dominant surface ───────────────────────── */}
+      <Suspense fallback={<MapLoading />}>
+        <MapCanvas
+          products={allProducts}
+          activeCategoryId={activeCategoryId}
+          focusedProduct={selectedProduct}
+          onSelectProduct={(p) => setSelectedProduct(p)}
+          onOutbidSuccess={handlePaymentSuccess}
+          onGameModeChange={setGameActive}
+        />
+      </Suspense>
+
+      {/* Map UI hides entirely while the player is inside the city */}
+      {gameActive ? null : (
+      <>
+      {/* ── Top row: view toggle · bid bar · panel toggles ──────────── */}
+      <div className="absolute top-4 left-4 z-30 hidden md:block">
+        <MapViewToggle />
+      </div>
+
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 w-full max-w-2xl px-4 hidden sm:block pointer-events-none">
+        <div className="pointer-events-auto">
           <BidBar onPaymentSuccess={handlePaymentSuccess} />
         </div>
       </div>
 
-      {/* 2. Main Interactive Endless City & Ocean Canvas */}
-      <div className="relative w-full h-full flex-1">
-        <CityCanvas
-          products={allProducts}
-          activeCategoryId={activeCategoryId}
-          selectedProduct={selectedProduct}
-          onSelectBuilding={(p) => setSelectedProduct(p)}
-          focusedBuildingId={focusedBuildingId}
-          onClearFocus={() => setFocusedBuildingId(null)}
-          viewMode={viewMode}
-          onToggleViewMode={handleToggleViewMode}
-          onOutbidSuccess={handlePaymentSuccess}
-        />
+      <div className="absolute top-4 right-4 z-40 hidden md:flex items-center gap-2">
+        <CurrencySelector />
+        <PanelToggles />
+      </div>
 
-        {/* 3. Floating Left Sidebar (Velora Harbor Stats & District Filters) */}
-        <div className="absolute top-20 left-4 md:left-6 z-20 hidden md:block pointer-events-none">
+      {/* ── Left rail: City Districts ───────────────────────────────── */}
+      {panels.districts && (
+        <div className="absolute left-4 top-[4.75rem] bottom-32 z-20 hidden lg:flex flex-col w-72 overflow-y-auto scrollbar-hide pointer-events-none">
           <div className="pointer-events-auto">
             <LeftSidebar
               categories={categories}
@@ -120,56 +135,47 @@ export default function Home() {
             />
           </div>
         </div>
+      )}
 
-        {/* 4. Floating Right Sidebar (Live Feed, Top Empires & How It Works) */}
-        <div className="absolute top-20 right-4 md:right-6 z-20 hidden lg:block pointer-events-none">
-          <div className="pointer-events-auto">
+      {/* ── Right rail: overview · legend · live feed · top empires ── */}
+      {rightRailVisible && (
+        <div className="absolute right-4 top-[4.75rem] bottom-32 z-20 hidden lg:flex flex-col w-[19.5rem] overflow-y-auto scrollbar-hide pointer-events-none">
+          <div className="pointer-events-auto flex flex-col gap-3">
+            {panels.overview && (
+              <Suspense fallback={<div className="h-[168px] rounded-2xl bg-surface-soft/60 dark:bg-elevated/60 animate-pulse" />}>
+                <MiniMap />
+              </Suspense>
+            )}
+            {panels.legend && <MapLegend />}
             <RightSidebar
               topProducts={topProducts}
               recentActivity={recentActivity}
-              onSelectProduct={(p) => {
-                setSelectedProduct(p);
-                setFocusedBuildingId(p.id);
-              }}
+              showLiveFeed={panels.liveFeed}
+              showTopEmpires={panels.topEmpires}
+              onSelectProduct={(p) => setSelectedProduct({ ...p })}
             />
           </div>
         </div>
+      )}
 
-        {/* 6. Bottom Floating Status Metrics (Hidden on Mobile) */}
-        <div className="hidden sm:block">
-          <BottomStatsBar />
-        </div>
-
-        {/* 7. Bottom Left Floating Map Controls with 2D/3D Switcher */}
-        <MapControls
-          onZoomIn={() => {
-            const canvas = document.querySelector("canvas");
-            if (canvas) {
-              const event = new WheelEvent("wheel", { deltaY: -100 });
-              canvas.dispatchEvent(event);
-            }
-          }}
-          onZoomOut={() => {
-            const canvas = document.querySelector("canvas");
-            if (canvas) {
-              const event = new WheelEvent("wheel", { deltaY: 100 });
-              canvas.dispatchEvent(event);
-            }
-          }}
-          onReset={handleFocusTopSpot}
-          onCenterTopSpot={handleFocusTopSpot}
-          viewMode={viewMode}
-          onToggleViewMode={handleToggleViewMode}
-        />
+      {/* ── Bottom-left: map controls ──────────────────────────────── */}
+      <div className="absolute bottom-5 left-4 z-20 hidden md:block">
+        <MapControls />
       </div>
 
-      {/* 8. Mobile Navigation Tab Bar & Bottom CTA */}
+      {/* ── Bottom-center: stats ──────────────────────────────────── */}
+      {panels.stats && (
+        <div className="hidden lg:block">
+          <BottomStatsBar />
+        </div>
+      )}
+
+      {/* ── Mobile ────────────────────────────────────────────────── */}
       <MobileNav onOpenBidModal={() => setMobileBidOpen(true)} />
 
-      {/* 9. Mobile Bid Modal Overlay */}
       {mobileBidOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 sm:hidden animate-in fade-in duration-150">
-          <div className="w-full max-w-sm glass-panel p-4 rounded-3xl border border-border shadow-feather-xl relative">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 sm:hidden">
+          <div className="w-full max-w-sm glass-panel p-4 rounded-3xl border border-border shadow-feather-lg relative">
             <div className="flex items-center justify-between mb-3">
               <span className="font-bold text-xs uppercase tracking-wider text-charcoal dark:text-cream">
                 Build Your Spot
@@ -186,16 +192,16 @@ export default function Home() {
         </div>
       )}
 
-      {/* 10. Global Command Search Modal */}
       <CommandSearch
         isOpen={searchOpen}
         onClose={() => setSearchOpen(false)}
         onSelect={(p) => {
-          setSelectedProduct(p);
-          setFocusedBuildingId(p.id);
+          setSelectedProduct({ ...p });
           setSearchOpen(false);
         }}
       />
+      </>
+      )}
     </div>
   );
 }

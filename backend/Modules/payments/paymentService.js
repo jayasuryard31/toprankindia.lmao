@@ -6,6 +6,27 @@ const { normalizeUrl } = require("../../Utils/urlNormalizer");
 const { fetchMetadata } = require("../../Utils/metadataService");
 const productService = require("../products/productService");
 const bidService = require("../bids/bidService");
+const { assignPlotForRank } = require("../map/mapService");
+
+/** Best-effort: stamp the product with the plot matching its all-time rank. */
+async function persistPlot(tx, productId, allTimeRank) {
+  try {
+    const slot = assignPlotForRank(allTimeRank || 1);
+    return await tx.product.update({
+      where: { id: productId },
+      data: {
+        plotNumber: slot.plotNumber,
+        plotDistrict: slot.district,
+        plotLng: slot.lng,
+        plotLat: slot.lat,
+        plotTier: slot.tier,
+      },
+    });
+  } catch (e) {
+    console.error("[Payment] Plot assignment failed:", e.message);
+    return null;
+  }
+}
 
 // ── Repository ──────────────────────────────────────────
 
@@ -181,7 +202,9 @@ async function verifyPayment(razorpayOrderId, razorpayPaymentId, razorpaySignatu
     const categoryRank = await productService.getCategoryRank(product.id);
     const allTimeRank = await productService.getAllTimeRank(product.id);
 
-    return { product, categoryRank, allTimeRank };
+    const plotted = await persistPlot(tx, product.id, allTimeRank);
+
+    return { product: plotted || product, categoryRank, allTimeRank };
   });
 
   return result;
@@ -239,7 +262,9 @@ async function verifyPaymentFromWebhook(razorpayOrderId, razorpayPaymentId) {
     const categoryRank = await productService.getCategoryRank(product.id);
     const allTimeRank = await productService.getAllTimeRank(product.id);
 
-    return { product, categoryRank, allTimeRank };
+    const plotted = await persistPlot(tx, product.id, allTimeRank);
+
+    return { product: plotted || product, categoryRank, allTimeRank };
   });
 
   return result;

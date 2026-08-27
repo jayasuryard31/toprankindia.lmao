@@ -22,6 +22,11 @@ model Product {
   clickCount    Int      @default(0) @map("click_count")
   totalPayments Int      @default(0) @map("total_payments")
   lastRankedAt  DateTime? @map("last_ranked_at")
+  plotNumber    String?  @map("plot_number")
+  plotDistrict  String?  @map("plot_district")
+  plotLng       Float?   @map("plot_lng")
+  plotLat       Float?   @map("plot_lat")
+  plotTier      String?  @map("plot_tier")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -91,4 +96,76 @@ model ProductClick {
   @@index([productId])
   @@index([createdAt])
   @@map("product_clicks")
+}
+
+model Billboard {
+  id              String    @id @default(cuid())
+  billboardNumber Int       @unique @map("billboard_number")
+  code            String    @unique
+  name            String
+  type            String
+  rateUSD         Int       @default(20) @map("rate_usd")
+  rateINR         Int       @default(1660) @map("rate_inr")
+  billingCycle    String    @default("MONTHLY") @map("billing_cycle")
+
+  plotDistrict    String    @default("Central Core") @map("plot_district")
+  elevation       Float     @default(8)
+  width           Float     @default(14)
+  height          Float     @default(7.5)
+  isGantry        Boolean   @default(false) @map("is_gantry")
+
+  isOccupied      Boolean   @default(false) @map("is_occupied")
+  paymentStatus   String    @default("VACANT") @map("payment_status")
+  activeUntil     DateTime? @map("active_until")
+  bookedMonths    Int       @default(1) @map("booked_months")
+  totalPaid       Int       @default(0) @map("total_paid")
+  lastPaidAt      DateTime? @map("last_paid_at")
+
+  brandName       String    @default("") @map("brand_name")
+  websiteUrl      String    @default("") @map("website_url")
+  tagline         String    @default("")
+  description     String    @default("")
+  logoUrl         String    @default("") @map("logo_url")
+  faviconUrl      String    @default("") @map("favicon_url")
+  categoryName    String    @default("Featured Sponsor") @map("category_name")
+  color           String    @default("#F05A38")
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  payments        BillboardPayment[]
+
+  @@index([billboardNumber])
+  @@index([code])
+  @@index([isOccupied])
+  @@index([paymentStatus])
+  @@map("billboards")
+}
+
+model BillboardPayment {
+  id                String    @id @default(cuid())
+  billboardId       String    @map("billboard_id")
+  billboardNumber   Int       @map("billboard_number")
+  razorpayOrderId   String    @unique @map("razorpay_order_id")
+  razorpayPaymentId String?   @unique @map("razorpay_payment_id")
+  razorpaySignature String?   @map("razorpay_signature")
+  amountUSD         Int       @map("amount_usd")
+  amountINR         Int       @map("amount_inr")
+  months            Int       @default(1)
+  status            String    @default("CREATED")
+
+  websiteUrl        String    @map("website_url")
+  brandName         String    @map("brand_name")
+  tagline           String    @default("")
+
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  billboard         Billboard @relation(fields: [billboardId], references: [id])
+
+  @@index([billboardId])
+  @@index([billboardNumber])
+  @@index([status])
+  @@index([razorpayOrderId])
+  @@map("billboard_payments")
 }
