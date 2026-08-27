@@ -20,13 +20,11 @@ export default function PlotBidPopup({ plot, screenPos, onClose, onAcquire }) {
 
   const [url, setUrl] = useState("");
   const [categoryId, setCategoryId] = useState("");
-  const isPrebuilt = Boolean(plot?.prebuilt);
-  const fixedDisplay = isPrebuilt
-    ? Math.max(1, Math.ceil(fromINR(plot.fixedPriceINR || (plot.fixedPriceUSD || 0) * 83)))
-    : null;
-  const [amount, setAmount] = useState(
-    String(fixedDisplay ?? Math.max(1, Math.ceil(fromINR(USD_PER_FLOOR * 83))))
-  );
+  const isPrebuilt = !!plot?.isPrebuilt;
+  const fixedRateUSD = plot?.fixedPriceUSD || (plot?.districtId?.includes("northpoint") ? 30 : 20);
+  const fixedRateINR = plot?.fixedPriceINR || fixedRateUSD * 83;
+  const minDisplayAmount = Math.max(1, Math.ceil(fromINR(fixedRateINR)));
+  const [amount, setAmount] = useState(String(minDisplayAmount));
   const [loading, setLoading] = useState(false);
 
   const host = useMemo(() => extractHostname(url), [url]);
@@ -50,7 +48,7 @@ export default function PlotBidPopup({ plot, screenPos, onClose, onAcquire }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!isValidUrl(url)) return toast.error("Enter a valid website URL (e.g. vegaedu.in)");
+    if (!isValidUrl(url)) return toast.error("Enter a valid website URL (e.g. websitename.com)");
     if (!categoryId) return toast.error("Choose a category");
     const amountINR = toINR(amount);
     if (!(Number(amount) > 0) || amountINR < 1) return toast.error(`Enter a valid amount in ${currency}`);
@@ -72,9 +70,43 @@ export default function PlotBidPopup({ plot, screenPos, onClose, onAcquire }) {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_placeholder",
         amount: order.amount * 100,
         currency: order.currency || "INR",
-        name: "TopRankIndia City",
+        name: "TopRankPlots Metropolis",
         description: `Acquire ${plot.plotNumber} — ${format(order.amount)}`,
-        order_id: order.orderId,
+        prefill: {
+          name: "TopRankPlots Trader",
+          email: "trader@toprankworld.lol",
+          contact: "9999999999",
+        },
+        theme: {
+          color: "#F05A38",
+        },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: "UPI (UPI ID, Google Pay, PhonePe, Paytm)",
+                instruments: [
+                  {
+                    method: "upi",
+                    flows: ["intent", "collect"],
+                  },
+                ],
+              },
+              other: {
+                name: "Cards, NetBanking & Wallets",
+                instruments: [
+                  { method: "card" },
+                  { method: "netbanking" },
+                  { method: "wallet" },
+                ],
+              },
+            },
+            sequence: ["block.upi", "block.other"],
+            preferences: {
+              show_default_blocks: true,
+            },
+          },
+        },
         handler: async (response) => {
           setLoading(true);
           try {
@@ -83,8 +115,17 @@ export default function PlotBidPopup({ plot, screenPos, onClose, onAcquire }) {
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
             });
+            const acquiredProduct = result?.product || {
+              id: Date.now(),
+              websiteUrl: cleanUrl,
+              websiteName: host || cleanUrl,
+              currentAmount: amountINR,
+              categoryId: Number(categoryId),
+              plotLng: plot.worldX,
+              plotLat: plot.worldZ,
+            };
             toast.success(`${plot.plotNumber} acquired — your building is rising!`);
-            onAcquire?.(result.product || { websiteUrl: cleanUrl }, plot.worldX, plot.worldZ);
+            onAcquire?.(acquiredProduct, plot.worldX, plot.worldZ);
             onClose?.();
           } catch {
             toast.error("Payment verification failed.");
@@ -105,11 +146,39 @@ export default function PlotBidPopup({ plot, screenPos, onClose, onAcquire }) {
     }
   };
 
+  const winW = typeof window !== "undefined" ? window.innerWidth : 1000;
+  const winH = typeof window !== "undefined" ? window.innerHeight : 800;
+
+  const rawX = screenPos?.x ?? winW / 2;
+  const rawY = screenPos?.y ?? winH / 2;
+
+  // Navbar height is 56px. Maintain strict safe margin below navbar.
+  const NAVBAR_HEIGHT = 56;
+  const TOP_SAFE_MARGIN = 16;
+  const MIN_TOP = NAVBAR_HEIGHT + TOP_SAFE_MARGIN; // 72px
+  const BOTTOM_SAFE_MARGIN = 20;
+
+  const popupWidth = 320;
+  const halfW = popupWidth / 2;
+  const posX = Math.max(halfW + 12, Math.min(winW - halfW - 12, rawX));
+
+  const estimatedH = 430;
+  const placeAbove = (rawY - estimatedH - 16) >= MIN_TOP;
+
+  let posY;
+  if (placeAbove) {
+    posY = Math.max(MIN_TOP, rawY - 14 - estimatedH);
+  } else {
+    posY = Math.max(MIN_TOP, Math.min(winH - estimatedH - BOTTOM_SAFE_MARGIN, rawY + 16));
+  }
+
+  const arrowLeft = Math.max(24, Math.min(popupWidth - 24, rawX - posX + halfW));
+
   return (
     <div
-      style={{ left: `${screenPos.x}px`, top: `${screenPos.y - 12}px` }}
+      style={{ left: `${posX}px`, top: `${posY}px` }}
       onClick={(e) => e.stopPropagation()}
-      className="absolute -translate-x-1/2 -translate-y-full z-[70] w-80 glass-panel p-4 rounded-3xl shadow-feather-lg border border-border text-xs animate-in fade-in zoom-in-95 duration-200 pointer-events-auto"
+      className="absolute -translate-x-1/2 z-40 w-80 max-w-[calc(100vw-24px)] max-h-[calc(100vh-88px)] overflow-y-auto glass-panel p-4 rounded-3xl shadow-feather-lg border border-border text-xs animate-in fade-in zoom-in-95 duration-200 pointer-events-auto"
     >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5 min-w-0">
@@ -130,12 +199,20 @@ export default function PlotBidPopup({ plot, screenPos, onClose, onAcquire }) {
         </button>
       </div>
 
+      {/* Fixed Base Rate Banner */}
+      <div className="flex items-center justify-between p-2.5 rounded-2xl bg-surface-soft/80 dark:bg-elevated/80 border border-border/60 mb-3">
+        <span className="text-[11px] font-bold text-charcoal/80 dark:text-cream/80">
+          Plot Fixed Base Rate:
+        </span>
+        <span className="font-mono text-xs font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+          ${fixedRateUSD} ({format(fixedRateINR)})
+        </span>
+      </div>
+
       <p className="text-[11px] text-muted mb-3">
         {plot.taken
           ? "This plot is occupied — outbid its owner from their building to take it over."
-          : isPrebuilt
-            ? `Existing ${plot.buildingKind || "building"} · ${plot.floors} floors. Fixed asking price — buy it as-is and it becomes your brand's landmark.`
-            : "Vacant land. Acquire it now — your bid sets the starting height."}
+          : `Acquire ${plot.plotNumber || "this plot"} with a fixed base rate of $${fixedRateUSD}. Your investment raises your brand's permanent skyscraper!`}
       </p>
 
       {!plot.taken && (
@@ -152,7 +229,7 @@ export default function PlotBidPopup({ plot, screenPos, onClose, onAcquire }) {
               type="text"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="Website URL (e.g. vegaedu.in)"
+              placeholder="Website URL (e.g. websitename.com)"
               required
               className="w-full pl-9 pr-3 py-2 bg-surface/90 border border-border/70 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-coral/30"
             />
@@ -209,7 +286,17 @@ export default function PlotBidPopup({ plot, screenPos, onClose, onAcquire }) {
         </form>
       )}
 
-      <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white/90 dark:border-t-[#1E1B18]/90" />
+      {placeAbove ? (
+        <div
+          style={{ left: `${arrowLeft}px` }}
+          className="absolute -bottom-2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white/90 dark:border-t-[#1E1B18]/90"
+        />
+      ) : (
+        <div
+          style={{ left: `${arrowLeft}px` }}
+          className="absolute -top-2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-white/90 dark:border-b-[#1E1B18]/90"
+        />
+      )}
     </div>
   );
 }

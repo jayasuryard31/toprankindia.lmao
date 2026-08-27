@@ -6,7 +6,6 @@ const ROWS = [
   { key: "liveFeed", label: "Live Feed" },
   { key: "topEmpires", label: "Top Empires" },
   { key: "overview", label: "Overview Mini-map" },
-  { key: "legend", label: "Map Legend" },
   { key: "stats", label: "Bottom Statistics" },
 ];
 

@@ -90,9 +90,44 @@ export default function BillboardBookingPopup({ billboard, screenPos, onClose, o
         key: import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_placeholder",
         amount: order.amount * 100,
         currency: order.currency || "INR",
-        name: "TopRankWorld.lol Billboard Advertising",
+        name: "TopRankPlots Billboard Advertising",
         description: `Book Billboard #${bbNumber} (${months} mo) — $${totalRateUSD}`,
         order_id: order.orderId,
+        prefill: {
+          name: "TopRankPlots Advertiser",
+          email: "advertiser@toprankworld.lol",
+          contact: "9999999999",
+        },
+        theme: {
+          color: "#F05A38",
+        },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: "UPI (UPI ID, Google Pay, PhonePe, Paytm)",
+                instruments: [
+                  {
+                    method: "upi",
+                    flows: ["intent", "collect"],
+                  },
+                ],
+              },
+              other: {
+                name: "Cards, NetBanking & Wallets",
+                instruments: [
+                  { method: "card" },
+                  { method: "netbanking" },
+                  { method: "wallet" },
+                ],
+              },
+            },
+            sequence: ["block.upi", "block.other"],
+            preferences: {
+              show_default_blocks: true,
+            },
+          },
+        },
         handler: async (response) => {
           setLoading(true);
           try {
@@ -157,19 +192,31 @@ export default function BillboardBookingPopup({ billboard, screenPos, onClose, o
   const winH = typeof window !== "undefined" ? window.innerHeight : 800;
   const rawX = screenPos?.x ?? winW / 2;
   const rawY = screenPos?.y ?? winH / 2;
-  const posX = Math.max(190, Math.min(winW - 190, rawX));
-  const isTopClose = rawY < 320;
-  const posY = isTopClose
-    ? Math.min(winH - 40, Math.max(80, rawY + 16))
-    : Math.min(winH - 40, Math.max(280, rawY - 14));
+
+  const NAVBAR_HEIGHT = 56;
+  const TOP_SAFE_MARGIN = 16;
+  const MIN_TOP = NAVBAR_HEIGHT + TOP_SAFE_MARGIN; // 72px
+  const BOTTOM_SAFE_MARGIN = 20;
+
+  const popupWidth = 350;
+  const halfW = popupWidth / 2;
+  const posX = Math.max(halfW + 12, Math.min(winW - halfW - 12, rawX));
+
+  const estimatedH = 460;
+  const placeAbove = (rawY - estimatedH - 16) >= MIN_TOP;
+
+  let posY;
+  if (placeAbove) {
+    posY = Math.max(MIN_TOP, rawY - 14 - estimatedH);
+  } else {
+    posY = Math.max(MIN_TOP, Math.min(winH - estimatedH - BOTTOM_SAFE_MARGIN, rawY + 16));
+  }
 
   return (
     <div
       style={{ left: `${posX}px`, top: `${posY}px` }}
       onClick={(e) => e.stopPropagation()}
-      className={`absolute -translate-x-1/2 ${
-        isTopClose ? "translate-y-0" : "-translate-y-full"
-      } z-[70] w-84 sm:w-92 glass-panel p-4 sm:p-5 rounded-3xl shadow-2xl border border-amber-400/40 text-xs animate-in fade-in zoom-in-95 duration-200 pointer-events-auto max-h-[85vh] overflow-y-auto`}
+      className="absolute -translate-x-1/2 z-40 w-84 sm:w-92 max-w-[calc(100vw-24px)] max-h-[calc(100vh-88px)] overflow-y-auto glass-panel p-4 sm:p-5 rounded-3xl shadow-2xl border border-amber-400/40 text-xs animate-in fade-in zoom-in-95 duration-200 pointer-events-auto"
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-2">

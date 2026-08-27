@@ -44,7 +44,10 @@
   --color-border-subtle: rgba(255, 255, 255, 0.08);
   --color-card: #1B1815;
   --color-elevated: #24201C;
-  --color-cream: #1B1815;
+  /* `cream` is only ever used as a TEXT colour (`dark:text-cream`), so in dark
+     mode it has to stay LIGHT — pointing it at a surface colour painted every
+     panel/leaderboard label black-on-black. */
+  --color-cream: #F7F5F1;
 }
 
 * {
@@ -229,6 +232,20 @@ html, body {
 
 .animate-pulse-slow {
   animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Shutter blink used when the map cuts between 3D and 2D.
+   The switch is a hard cut on purpose — cross-fading two completely different
+   renderings meant running both for the length of the transition. */
+@keyframes view-blink {
+  0%   { opacity: 0; }
+  14%  { opacity: 1; }
+  46%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.animate-view-blink {
+  animation: view-blink 420ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 @keyframes pulseAura {

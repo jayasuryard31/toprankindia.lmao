@@ -1,10 +1,9 @@
-import { useState, useMemo, lazy, Suspense } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { useHome } from "../hooks/useHome";
 import { useProducts } from "../hooks/useProducts";
 import { useCategories } from "../hooks/useCategories";
 import MapControls from "../components/map/MapControls";
 import MapViewToggle from "../components/map/MapViewToggle";
-import MapLegend from "../components/map/MapLegend";
 import PanelToggles from "../components/map/PanelToggles";
 import CurrencySelector from "../components/map/CurrencySelector";
 import { useMapStore } from "../components/map/useMapStore";
@@ -19,8 +18,8 @@ import ErrorState from "../components/common/ErrorState";
 // The 3D city (three.js + engine + in-city game layer) is a large chunk — load
 // it after the page shell so the dashboard/nav/panels paint immediately.
 const MapCanvas = lazy(() => import("../components/map/MapCanvas"));
-// MiniMap pulls maplibre-gl (~250KB gz) — only load it when the overview panel
-// is actually shown.
+// MiniMap now renders from cityGrid on a canvas (no maplibre); still lazy so
+// it only mounts when the overview panel is shown.
 const MiniMap = lazy(() => import("../components/map/MiniMap"));
 
 function MapLoading() {
@@ -47,6 +46,14 @@ export default function Home() {
   const [gameActive, setGameActive] = useState(false);
 
   const panels = useMapStore((s) => s.panels);
+  const setInCity = useMapStore((s) => s.setInCity);
+
+  // Publish "player is inside the city" globally so the site header can get out
+  // of the way; always clear it when this page unmounts.
+  useEffect(() => {
+    setInCity(gameActive);
+  }, [gameActive, setInCity]);
+  useEffect(() => () => setInCity(false), [setInCity]);
 
   const {
     data: productsData,
@@ -87,10 +94,14 @@ export default function Home() {
   }
 
   const rightRailVisible =
-    panels.overview || panels.legend || panels.liveFeed || panels.topEmpires;
+    panels.overview || panels.liveFeed || panels.topEmpires;
 
   return (
-    <div className="relative w-full h-[calc(100vh-68px)] min-h-[560px] overflow-hidden bg-[#F1EEE6] dark:bg-[#14171C]">
+    <div
+      className={`relative w-full overflow-hidden bg-[#F1EEE6] dark:bg-[#14171C] ${
+        gameActive ? "h-screen" : "h-[calc(100vh-56px)] min-h-[560px]"
+      }`}
+    >
       {/* ── Map canvas — the dominant surface ───────────────────────── */}
       <Suspense fallback={<MapLoading />}>
         <MapCanvas
@@ -137,7 +148,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── Right rail: overview · legend · live feed · top empires ── */}
+      {/* ── Right rail: overview · live feed · top empires ── */}
       {rightRailVisible && (
         <div className="absolute right-4 top-[4.75rem] bottom-32 z-20 hidden lg:flex flex-col w-[19.5rem] overflow-y-auto scrollbar-hide pointer-events-none">
           <div className="pointer-events-auto flex flex-col gap-3">
@@ -146,7 +157,6 @@ export default function Home() {
                 <MiniMap />
               </Suspense>
             )}
-            {panels.legend && <MapLegend />}
             <RightSidebar
               topProducts={topProducts}
               recentActivity={recentActivity}

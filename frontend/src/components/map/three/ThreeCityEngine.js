@@ -14,7 +14,6 @@ import {
   intersections,
   roadSegments,
   lotAt,
-  plotNumberFor,
   ocean,
   greenbelt,
   worldBounds,
@@ -33,17 +32,17 @@ import {
   districtCenter,
   hash2,
 } from "./cityGrid";
-import { makeTower, disposeGroup, setAnisotropy, setTowerTheme } from "./towerFactory";
+import { makeTower, disposeGroup, setAnisotropy, setTowerTheme, setTowerWindowGlow } from "./towerFactory";
+import { currentTimeOfDay, presetFor } from "./timeOfDay";
 import { createPostFX, shouldEnablePostFX } from "./postfx";
 import {
+  MAT,
   makeTreeField,
-  makeTree,
   createTrafficFleet,
   createFountain,
   carColors,
   makeVessel,
   makeStreetlight,
-  makePeople,
   grassTexture,
   fieldTexture,
   sandTexture,
@@ -52,16 +51,22 @@ import {
   disposeDeep,
   finishTex,
   normalFromCanvas,
+  brickPathTexture,
   grassNormal,
+  setLampIntensity,
 } from "./cityProps";
 import {
   makeBrandOwnershipBoard,
+  makeBrandRoofMesh,
   makeCityBillboard,
+  makeFacadeBillboard,
   CITY_BILLBOARD_LOCATIONS,
   loadClaimedBillboards,
   saveClaimedBillboards,
   setCrispAnisotropy,
+  setSignageMode,
 } from "./brandShowcase";
+import { buildTimesSquare as buildTimesSquareScene } from "./timesSquare";
 import { NpcSystem } from "../../../game/systems/npc/NpcSystem.js";
 import { TrafficLightSystem } from "../../../game/systems/traffic/TrafficLightSystem.js";
 
@@ -89,13 +94,20 @@ export class ThreeCityEngine {
   constructor(canvasContainer, options = {}) {
     this.container = canvasContainer;
     this.options = options;
-    this.theme = options.theme || "light";
+
+    // The city and the site chrome are ALWAYS in the same mode. `uiTheme` is
+    // the master switch (itself clock-driven — see ThemeContext), and the wall
+    // clock only chooses which *light* look to use: midday sun or golden hour.
+    this.uiTheme = options.theme || "light";
+    this.tod = this._resolveTod();
+    this.atmo = presetFor(this.tod);
+    this.theme = this.atmo.dark ? "dark" : "light";
 
     this.scene = null;
     this.camera = null;
     this.renderer = null;
     this.animFrameId = null;
-    this.clock = new THREE.Clock();
+    this._lastTime = typeof performance !== "undefined" ? performance.now() : Date.now();
 
     this.target = new THREE.Vector3(0, 0, 0);
     this.spherical = new THREE.Spherical(2050, Math.PI / 3.5, Math.PI * 0.18);
@@ -125,6 +137,8 @@ export class ThreeCityEngine {
     this.skyBodies = [];
     this.gameMode = false;
     this.gameHook = null;
+    this.viewMode = "3D";
+    this._heatOn = false;
     this._solids = null;
     this.propColliders = [];
     this.parkBenches = [];
@@ -141,7 +155,6 @@ export class ThreeCityEngine {
   init() {
     const width = this.container.clientWidth || window.innerWidth;
     const height = this.container.clientHeight || window.innerHeight;
-    const isDark = this.theme === "dark";
 
     this.scene = new THREE.Scene();
 
@@ -151,7 +164,7 @@ export class ThreeCityEngine {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = isDark ? 0.9 : 1.02;
+    this.renderer.toneMappingExposure = this.atmo.exposure;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.container.appendChild(this.renderer.domElement);
 
@@ -168,7 +181,8 @@ export class ThreeCityEngine {
     pmrem.dispose();
 
     const b = worldBounds();
-    this.scene.fog = new THREE.Fog(isDark ? 0x0b1526 : 0xdbe6ef, b.cityD * 2.2, b.cityD * 11);
+    this._fog = new THREE.Fog(this.atmo.fogColor, b.cityD * 2.2, b.cityD * 11);
+    this.scene.fog = this._fog;
 
     this.buildAll();
 
@@ -193,57 +207,127 @@ export class ThreeCityEngine {
     this.animate();
   }
 
+  /**
+   * Build the world in two parts.
+   *
+   * CORE is synchronous and is everything you need to recognise the city:
+   * sky, light, ground, the road grid and the skyline. It is what the first
+   * frame shows.
+   *
+   * Everything else — the park, the square, the coast, street furniture,
+   * traffic and ~350 pedestrians — is queued and built one chunk per idle
+   * slice. Building it all up front is what made "Enter City" feel like the
+   * tab had hung: several hundred procedural models and a dozen canvas
+   * textures on one blocking call. Queued, the map is interactive in a single
+   * frame and fills in over the next second while the user is still reading
+   * the page.
+   */
   buildAll() {
     setTowerTheme(this.theme === "dark");
+    // Shared material banks (towers, lamps, signage) are module-level, so the
+    // clock is applied once here rather than per-object.
+    setTowerWindowGlow(this.atmo.windowEmissive);
+    setLampIntensity(this.atmo.lampIntensity);
+    setSignageMode(this.atmo);
+
+    // ── core ────────────────────────────────────────────────────────────
     this.setupSky();
     this.setupLighting();
     this.buildTerrain();
     this.buildRoads();
     this.buildDistrictPlots();
-    this.buildCentralPlaza();
-    this.buildPark();
-    this.buildTimesSquare();
-    this.buildCoastline();
-    this.buildGreenbelt();
     this.buildFillerCity();
-    this.buildTreesAndProps();
-    this.buildTraffic();
-    this.trafficLightSystem = new TrafficLightSystem(this);
+
+    // ── deferred, heaviest last ─────────────────────────────────────────
+    this._cancelBuildQueue();
+    this._buildQueue = [
+      () => { this.buildCentralPlaza(); this.buildPark(); },
+      () => this.buildTimesSquare(),
+      () => { this.buildCoastline(); this.buildGreenbelt(); },
+      () => this.buildTreesAndProps(),
+      () => { this.buildTraffic(); this.trafficLightSystem = new TrafficLightSystem(this); },
+      () => { this.npcSystem = new NpcSystem(this); },
+    ];
+    this._pumpBuildQueue();
+  }
+
+  /** Run the next deferred chunk, then schedule the one after it. */
+  _pumpBuildQueue() {
+    if (!this._buildQueue || !this._buildQueue.length) {
+      this._buildQueue = null;
+      this._buildHandle = null;
+      return;
+    }
+    const step = this._buildQueue.shift();
+    const run = () => {
+      this._buildHandle = null;
+      if (this._destroyed) return;
+      step();
+      this.invalidateSolids();
+      this.onProjectUpdate();
+      this._pumpBuildQueue();
+    };
+    this._buildHandle =
+      typeof requestIdleCallback === "function"
+        ? { idle: requestIdleCallback(run, { timeout: 250 }) }
+        : { raf: requestAnimationFrame(run) };
+  }
+
+  _cancelBuildQueue() {
+    const h = this._buildHandle;
+    if (h?.idle != null && typeof cancelIdleCallback === "function") cancelIdleCallback(h.idle);
+    if (h?.raf != null) cancelAnimationFrame(h.raf);
+    this._buildHandle = null;
+    this._buildQueue = null;
+  }
+
+  /**
+   * Finish the deferred build right now. Called before anything that needs a
+   * complete world — walking into the city needs its colliders, its traffic
+   * and its crowds present, not arriving a beat later.
+   */
+  ensureBuilt() {
+    if (!this._buildQueue) return;
+    const queue = this._buildQueue;
+    this._cancelBuildQueue();
+    queue.forEach((step) => step());
+    this.invalidateSolids();
+    this.onProjectUpdate();
   }
 
   // ── Sky & sun ────────────────────────────────────────────────────────
   setupSky() {
+    const a = this.atmo;
     const isDark = this.theme === "dark";
     this.sky = new Sky();
     this.sky.scale.setScalar(450000);
     const u = this.sky.material.uniforms;
-    u.turbidity.value = isDark ? 6 : 3.2;
-    u.rayleigh.value = isDark ? 0.5 : 2.8;
-    u.mieCoefficient.value = isDark ? 0.006 : 0.004;
-    u.mieDirectionalG.value = 0.85;
+    u.turbidity.value = a.turbidity;
+    u.rayleigh.value = a.rayleigh;
+    u.mieCoefficient.value = a.mieCoefficient;
+    u.mieDirectionalG.value = a.mieDirectionalG;
 
-    // The Sky shader's "sun" sits just below the horizon at night so the dome
-    // goes deep blue; the moon (and the key light) live on their own vector.
-    const skyElev = isDark ? -6 : 42;
-    const skyAzi = isDark ? 250 : 122;
+    // At night the Sky shader's "sun" is parked just below the horizon so the
+    // dome goes deep blue; the moon (and the key light) live on their own
+    // vector. At dusk it hangs low and wide to smear the whole sky orange.
     const skySun = new THREE.Vector3().setFromSphericalCoords(
       1,
-      THREE.MathUtils.degToRad(90 - skyElev),
-      THREE.MathUtils.degToRad(skyAzi)
+      THREE.MathUtils.degToRad(90 - a.skyElevation),
+      THREE.MathUtils.degToRad(a.skyAzimuth)
     );
     u.sunPosition.value.copy(skySun);
 
     this.sunVec = new THREE.Vector3().setFromSphericalCoords(
       1,
-      THREE.MathUtils.degToRad(90 - (isDark ? 46 : 42)),
-      THREE.MathUtils.degToRad(isDark ? 44 : 122)
+      THREE.MathUtils.degToRad(90 - a.sunElevation),
+      THREE.MathUtils.degToRad(a.sunAzimuth)
     );
 
     this.scene.add(this.sky);
     this.scene.background = null;
 
     this.buildCelestials(isDark);
-    this.buildClouds(isDark);
+    this.buildClouds();
   }
 
   buildCelestials(isDark) {
@@ -298,8 +382,14 @@ export class ThreeCityEngine {
       this.scene.add(sun);
       this.skyBodies.push(sun);
       const glow = new THREE.Mesh(
-        new THREE.SphereGeometry(460, 24, 24),
-        new THREE.MeshBasicMaterial({ color: 0xffe9b0, transparent: true, opacity: 0.3, depthWrite: false, fog: false })
+        new THREE.SphereGeometry(this.atmo.id === "evening" ? 680 : 460, 24, 24),
+        new THREE.MeshBasicMaterial({
+          color: this.atmo.id === "evening" ? 0xff9a4d : 0xffe9b0,
+          transparent: true,
+          opacity: this.atmo.id === "evening" ? 0.42 : 0.3,
+          depthWrite: false,
+          fog: false,
+        })
       );
       glow.position.copy(pos);
       this.scene.add(glow);
@@ -307,10 +397,16 @@ export class ThreeCityEngine {
     }
   }
 
-  buildClouds(isDark) {
+  buildClouds() {
+    const a = this.atmo;
     const b = worldBounds();
-    const count = isDark ? 10 : 18;
-    for (let i = 0; i < count; i++) {
+
+    // The cloud deck must sit ABOVE the whole skyline, otherwise sprites cut
+    // across the top of the tallest towers whenever the camera looks up. The
+    // ceiling is derived from the tallest thing the city can ever build, not
+    // hard-coded, so a 200-floor #1 landmark still clears it.
+    const CLOUD_BASE = MAX_FLOORS * FLOOR_HEIGHT + 420; // ~1.1km
+    for (let i = 0; i < a.cloudCount; i++) {
       const high = i % 3 !== 0;
       const sprite = new THREE.Sprite(
         new THREE.SpriteMaterial({
@@ -318,15 +414,15 @@ export class ThreeCityEngine {
           transparent: true,
           depthWrite: false,
           fog: false,
-          opacity: (isDark ? 0.34 : 0.82) * (high ? 1 : 0.55),
-          color: isDark ? 0x8b95ac : 0xffffff,
+          opacity: a.cloudOpacity * (high ? 1 : 0.6),
+          color: a.cloudColor,
         })
       );
       const w = 1400 + Math.random() * 2600;
       sprite.scale.set(w, w * 0.5, 1);
       sprite.position.set(
         -b.cityW * 1.6 + Math.random() * b.cityW * 3.2,
-        high ? 1500 + Math.random() * 1100 : 680 + Math.random() * 240,
+        high ? CLOUD_BASE + 900 + Math.random() * 1200 : CLOUD_BASE + Math.random() * 320,
         -b.cityD * 1.4 + Math.random() * b.cityD * 3.2
       );
       sprite.renderOrder = 2;
@@ -338,17 +434,13 @@ export class ThreeCityEngine {
   }
 
   setupLighting() {
-    const isDark = this.theme === "dark";
+    const a = this.atmo;
     const b = worldBounds();
 
-    this.hemi = new THREE.HemisphereLight(
-      isDark ? 0x2a3652 : 0xcfe2f5,
-      isDark ? 0x0b0f16 : 0x9c8f78,
-      isDark ? 0.6 : 1.25
-    );
+    this.hemi = new THREE.HemisphereLight(a.hemiSky, a.hemiGround, a.hemiIntensity);
     this.scene.add(this.hemi);
 
-    this.sun = new THREE.DirectionalLight(isDark ? 0x9ab8ff : 0xfff1da, isDark ? 0.55 : 3.0);
+    this.sun = new THREE.DirectionalLight(a.sunColor, a.sunIntensity);
     const d = Math.max(b.halfW, b.halfD) * 1.25;
     this.sun.position.copy(this.sunVec).multiplyScalar(2400).add(new THREE.Vector3(0, 500, 0));
     this.sun.castShadow = true;
@@ -385,7 +477,7 @@ export class ThreeCityEngine {
     soilNrm.repeat.copy(soilTex.repeat);
     const island = new THREE.Mesh(
       new THREE.PlaneGeometry(b.cityW + GRID.SHORE_MARGIN * 2 + 120, b.cityD + GRID.STREET_SPACING * 6),
-      new THREE.MeshStandardMaterial({ map: soilTex, normalMap: soilNrm, normalScale: new THREE.Vector2(0.6, 0.6), color: isDark ? 0x8fa08a : 0xf2f6ee, roughness: 0.96 })
+      new THREE.MeshStandardMaterial({ map: soilTex, normalMap: soilNrm, normalScale: new THREE.Vector2(0.6, 0.6), color: this.atmo.islandTint, roughness: 0.96 })
     );
     island.rotation.x = -Math.PI / 2;
     island.position.set(-30, -0.15, 0);
@@ -607,12 +699,51 @@ export class ThreeCityEngine {
   }
 
   // ── Central Fountain Botanical Park & Plaza ───────────────────────────
+  /**
+   * Victorian double-globe lamp post — the park/plaza street furniture.
+   * Shares MAT.lampGlobe so the city clock can dim every globe at once, and
+   * registers itself as a collider so the player can't walk through the pole.
+   *
+   * `scale` > 1 gives the taller Times Square variant.
+   */
+  makeVictorianLamp(x, z, { yaw = 0, scale = 1, collide = true } = {}) {
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1e, roughness: 0.5, metalness: 0.7 });
+    const lamp = new THREE.Group();
+    lamp.position.set(x, 0.16, z);
+    lamp.rotation.y = yaw;
+
+    const h = 4.5 * scale;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.14 * scale, 0.22 * scale, h, 8), poleMat);
+    pole.position.y = h / 2;
+    pole.castShadow = true;
+    lamp.add(pole);
+
+    [-0.6 * scale, 0.6 * scale].forEach((lx) => {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.6 * scale), poleMat);
+      arm.position.set(lx * 0.5, h - 0.2, 0);
+      lamp.add(arm);
+
+      const globe = new THREE.Mesh(new THREE.SphereGeometry(0.3 * scale, 12, 10), MAT.lampGlobe);
+      globe.position.set(lx, h - 0.2, 0);
+      globe.userData.bloom = true;
+      globe.layers.enable(1);
+      lamp.add(globe);
+    });
+
+    this.environmentGroup.add((lamp));
+    if (collide) {
+      if (!this.propColliders) this.propColliders = [];
+      this.propColliders.push({ cx: x, cz: z, hw: 0.3, hd: 0.3, h, prop: true });
+    }
+    return lamp;
+  }
+
   makeStonePaversTexture() {
     const cv = document.createElement("canvas");
     cv.width = cv.height = 256;
     const ctx = cv.getContext("2d");
     const isDark = this.theme === "dark";
-    ctx.fillStyle = isDark ? "#232730" : "#baa894";
+    ctx.fillStyle = isDark ? "#232730" : "#9c8d79";
     ctx.fillRect(0, 0, 256, 256);
 
     const cols = 8, rows = 8;
@@ -625,11 +756,11 @@ export class ThreeCityEngine {
         const rnd = (Math.random() * 24 - 12);
         ctx.fillStyle = isDark
           ? `rgb(${44 + rnd}, ${48 + rnd}, ${56 + rnd})`
-          : `rgb(${216 + rnd}, ${206 + rnd}, ${192 + rnd})`;
+          : `rgb(${182 + rnd}, ${172 + rnd}, ${158 + rnd})`;
         ctx.beginPath();
         ctx.roundRect(px + 2, py + 2, cw - 4, ch - 4, 3);
         ctx.fill();
-        ctx.strokeStyle = isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.35)";
+        ctx.strokeStyle = isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.16)";
         ctx.lineWidth = 1;
         ctx.stroke();
       }
@@ -976,7 +1107,7 @@ export class ThreeCityEngine {
     lawnNrm.repeat.copy(lawnTex.repeat);
     const lawn = new THREE.Mesh(
       new THREE.CircleGeometry(outerR - 0.5, 64),
-      new THREE.MeshStandardMaterial({ map: lawnTex, normalMap: lawnNrm, normalScale: new THREE.Vector2(0.7, 0.7), color: isDark ? 0x93a48e : 0xf4f8f0, roughness: 0.95 })
+      new THREE.MeshStandardMaterial({ map: lawnTex, normalMap: lawnNrm, normalScale: new THREE.Vector2(0.7, 0.7), color: this.atmo.grassTint, roughness: 0.95 })
     );
     lawn.rotation.x = -Math.PI / 2;
     lawn.position.set(cx, 0.12, cz);
@@ -985,10 +1116,14 @@ export class ThreeCityEngine {
 
     // 3. Stone Pavers Materials & Network of Park Roads / Walkways
     const stoneTex = this.makeStonePaversTexture();
+    // Tinted DOWN, never left at pure white: an untinted paver texture under
+    // the key light is what made every park walkway read as a blown-out white
+    // ribbon from the air.
     const stoneRoadMat = new THREE.MeshStandardMaterial({
       map: stoneTex,
-      color: isDark ? 0x999999 : 0xffffff,
-      roughness: 0.9,
+      color: this.atmo.paverTint,
+      roughness: 0.95,
+      metalness: 0,
     });
 
     // Outer cobblestone promenade ring road
@@ -1049,7 +1184,7 @@ export class ThreeCityEngine {
     this.fountain.group.traverse((o) => {
       if (o.userData?.bloom) o.layers.enable(1);
     });
-    this.environmentGroup.add(this.fountain.group);
+    this.environmentGroup.add((this.fountain.group));
     this.fountainCollider = {
       cx,
       cz,
@@ -1226,31 +1361,27 @@ export class ThreeCityEngine {
       });
     }
 
-    // 8. Victorian Double-Globe Lamp Posts along park walkways
-    const lampGlow = new THREE.MeshBasicMaterial({ color: 0xffea9f });
-    for (let i = 0; i < 16; i++) {
-      const a = (i / 16) * Math.PI * 2 + 0.15;
+    // 8. Victorian Double-Globe Lamp Posts — dense enough that every walkway,
+    // radial avenue and diagonal is actually lit end to end after dark.
+    for (let i = 0; i < 32; i++) {
+      const a = (i / 32) * Math.PI * 2 + 0.15;
       const rad = i % 2 === 0 ? outerR - 10 : 33;
-      const lamp = new THREE.Group();
-      lamp.position.set(cx + Math.cos(a) * rad, 0.16, cz + Math.sin(a) * rad);
-
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.22, 4.5, 8), fenceMat);
-      pole.position.y = 2.25;
-      pole.castShadow = true;
-      lamp.add(pole);
-
-      [-0.6, 0.6].forEach((lx) => {
-        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.6), fenceMat);
-        arm.position.set(lx * 0.5, 4.3, 0);
-        lamp.add(arm);
-
-        const globe = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), lampGlow);
-        globe.position.set(lx, 4.3, 0);
-        globe.userData.bloom = true;
-        lamp.add(globe);
-      });
-
-      this.environmentGroup.add(lamp);
+      this.makeVictorianLamp(cx + Math.cos(a) * rad, cz + Math.sin(a) * rad, { yaw: -a });
+    }
+    // A pair flanking each cardinal stone avenue, walking outward from the
+    // fountain apron to the promenade ring.
+    for (let i = 0; i < 4; i++) {
+      const ang = (i / 4) * Math.PI * 2;
+      const side = ang + Math.PI / 2;
+      for (let r = 24; r < outerR - 8; r += 13) {
+        [-6.5, 6.5].forEach((off) => {
+          this.makeVictorianLamp(
+            cx + Math.cos(ang) * r + Math.cos(side) * off,
+            cz + Math.sin(ang) * r + Math.sin(side) * off,
+            { yaw: -ang }
+          );
+        });
+      }
     }
 
     // 9. Lush Park Trees & Flowering Cherry Blossoms
@@ -1287,7 +1418,7 @@ export class ThreeCityEngine {
     });
 
     if (treePositions.length) {
-      this.environmentGroup.add(makeTreeField(treePositions, { pineRatio: 0.25 }));
+      this.environmentGroup.add((makeTreeField(treePositions, { pineRatio: 0.25 })));
     }
 
     // 10. Colorful Flowerbeds & Trimmed Hedges
@@ -1326,6 +1457,28 @@ export class ThreeCityEngine {
       spoke.position.set(cx + Math.cos(ang) * (outerR + 80), 0.09, cz + Math.sin(ang) * (outerR + 80));
       spoke.receiveShadow = true;
       this.environmentGroup.add(spoke);
+
+      // Street lighting down every approach road, both kerbs, so the roads
+      // feeding the fountain plaza are lit the way the plaza itself is.
+      const side = ang + Math.PI / 2;
+      for (let r = outerR + 14; r < outerR + 152; r += 26) {
+        [-1, 1].forEach((sdir) => {
+          const lx = cx + Math.cos(ang) * r + Math.cos(side) * sdir * 9.5;
+          const lz = cz + Math.sin(ang) * r + Math.sin(side) * sdir * 9.5;
+          const sl = makeStreetlight();
+          sl.position.set(lx, 0, lz);
+          sl.rotation.y = -ang + (sdir > 0 ? Math.PI : 0);
+          sl.traverse((o) => { if (o.userData.bloom) o.layers.enable(1); });
+          this.environmentGroup.add((sl));
+          this.propColliders.push({ cx: lx, cz: lz, hw: 0.32, hd: 0.32, h: 8, prop: true });
+        });
+      }
+    }
+
+    // Lamps hugging the outer ring road itself.
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2 + 0.1;
+      this.makeVictorianLamp(cx + Math.cos(a) * (outerR + 19), cz + Math.sin(a) * (outerR + 19), { yaw: -a });
     }
   }
 
@@ -1383,121 +1536,55 @@ export class ThreeCityEngine {
 
 
   // ── Times Square — the neon crossroads, deliberately far from the park ──
+  // The whole square (sign wall, shopfronts, landmark stack, plaza furniture,
+  // street clutter and the standing crowd) lives in timesSquare.js — it is a
+  // big enough piece of authored place to be worth its own module.
   buildTimesSquare() {
+    buildTimesSquareScene(this);
+  }
+
+  /**
+   * A single park bench + its collider + a "sit here" hint for the game layer.
+   * Extracted so the plaza ring and the park spine build identical furniture.
+   */
+  addParkBench(x, z, yaw) {
     const isDark = this.theme === "dark";
-    const ts = timesSquareRect();
-    const cx = ts.cx;
-    const cz = ts.cz;
-    const w = ts.x1 - ts.x0;
-    const d = ts.z1 - ts.z0;
-    this.timesSquareCenter = { x: cx, z: cz };
+    const benchMat = new THREE.MeshStandardMaterial({ color: isDark ? 0x4a3a2a : 0x8a6242, roughness: 0.85 });
+    const legMat = new THREE.MeshStandardMaterial({ color: isDark ? 0x2b2f36 : 0x55585e, roughness: 0.7, metalness: 0.4 });
 
-    const g = new THREE.Group();
-    g.name = "times-square";
+    const bench = new THREE.Group();
+    bench.position.set(x, 0.16, z);
+    bench.rotation.y = yaw;
 
-    // Bow-tie pedestrian plaza: red granite paving with painted crosswalk grid
-    const paveCv = document.createElement("canvas");
-    paveCv.width = paveCv.height = 512;
-    const pc = paveCv.getContext("2d");
-    pc.fillStyle = isDark ? "#3a2126" : "#8d5b53";
-    pc.fillRect(0, 0, 512, 512);
-    for (let y = 0; y < 512; y += 32) {
-      for (let x = 0; x < 512; x += 64) {
-        const off = (y / 32) % 2 ? 32 : 0;
-        const v = Math.random() * 22 - 11;
-        pc.fillStyle = isDark
-          ? `rgb(${64 + v},${38 + v},${42 + v})`
-          : `rgb(${156 + v},${100 + v},${92 + v})`;
-        pc.fillRect(x + off + 2, y + 2, 60, 28);
-      }
-    }
-    for (let i = 0; i < 9000; i++) {
-      pc.fillStyle = `rgba(255,255,255,${Math.random() * 0.05})`;
-      pc.fillRect(Math.random() * 512, Math.random() * 512, 1.5, 1.5);
-    }
-    const paveTex = finishTex(paveCv);
-    paveTex.repeat.set(10, 10);
-    const paveNrm = normalFromCanvas(paveCv, 1.1);
-    paveNrm.repeat.copy(paveTex.repeat);
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.2, 1.3), benchMat);
+    seat.position.y = 0.85;
+    seat.castShadow = true;
+    bench.add(seat);
 
-    const plaza = new THREE.Mesh(
-      new THREE.PlaneGeometry(w, d),
-      new THREE.MeshStandardMaterial({
-        map: paveTex,
-        normalMap: paveNrm,
-        normalScale: new THREE.Vector2(0.6, 0.6),
-        roughness: 0.82,
-        metalness: 0.05,
-      })
-    );
-    plaza.rotation.x = -Math.PI / 2;
-    plaza.position.set(cx, 0.22, cz);
-    plaza.receiveShadow = true;
-    g.add(plaza);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.8, 0.16), benchMat);
+    back.position.set(0, 1.3, -0.55);
+    back.rotation.x = -0.15;
+    back.castShadow = true;
+    bench.add(back);
 
-    // tiered red bleacher steps (the famous ones) on the north edge
-    const stepMat = new THREE.MeshStandardMaterial({
-      color: isDark ? 0x7a1f2b : 0xc02b3a,
-      roughness: 0.5,
-      metalness: 0.12,
-      emissive: new THREE.Color(0xc02b3a),
-      emissiveIntensity: isDark ? 0.35 : 0.06,
+    [-1.6, 1.6].forEach((lx) => {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.85, 1.2), legMat);
+      leg.position.set(lx, 0.425, 0);
+      leg.castShadow = true;
+      bench.add(leg);
     });
-    for (let i = 0; i < 7; i++) {
-      const step = new THREE.Mesh(new THREE.BoxGeometry(w * 0.44, 0.7, 2.0), stepMat);
-      step.position.set(cx, 0.35 + i * 0.7, cz - d * 0.34 + i * 2.0);
-      step.castShadow = true;
-      step.receiveShadow = true;
-      step.userData.bloom = true;
-      g.add(step);
-    }
+    this.environmentGroup.add((bench));
 
-    // pedestrian bollards ringing the plaza
-    const bollardMat = new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.5, metalness: 0.6 });
-    this.timesSquareColliders = [];
-    for (let i = 0; i < 28; i++) {
-      const a = (i / 28) * Math.PI * 2;
-      const bx = cx + Math.cos(a) * (w * 0.47);
-      const bz = cz + Math.sin(a) * (d * 0.47);
-      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.36, 1.1, 10), bollardMat);
-      b.position.set(bx, 0.55, bz);
-      b.castShadow = true;
-      g.add(b);
-    }
-
-    // The neon canyon: stacked emissive ad panels climbing the four corners.
-    const neon = [0xff2e63, 0x2ec5ff, 0xffd23f, 0x8f5bff, 0x3bf0a8];
-    const corners = [
-      [cx - w * 0.52, cz - d * 0.52, Math.PI * 0.25],
-      [cx + w * 0.52, cz - d * 0.52, -Math.PI * 0.25],
-      [cx - w * 0.52, cz + d * 0.52, Math.PI * 0.75],
-      [cx + w * 0.52, cz + d * 0.52, -Math.PI * 0.75],
-    ];
-    this._tsPanels = [];
-    corners.forEach(([px, pz, rot], ci) => {
-      for (let k = 0; k < 6; k++) {
-        const pw = 12 + (k % 2) * 5;
-        const ph = 6 + (k % 3) * 2;
-        const panel = new THREE.Mesh(
-          new THREE.BoxGeometry(pw, ph, 0.7),
-          new THREE.MeshStandardMaterial({
-            color: neon[(ci + k) % neon.length],
-            emissive: new THREE.Color(neon[(ci + k) % neon.length]),
-            emissiveIntensity: isDark ? 2.2 : 1.0,
-            roughness: 0.3,
-          })
-        );
-        panel.position.set(px, 14 + k * 9.5, pz);
-        panel.rotation.y = rot;
-        panel.userData.bloom = true;
-        panel.userData.pulse = 0.6 + ((ci * 6 + k) % 7) * 0.22;
-        this._tsPanels.push(panel);
-        g.add(panel);
-      }
+    this.parkBenches.push({
+      x: x + Math.sin(yaw) * 0.15,
+      y: 0.1,
+      z: z + Math.cos(yaw) * 0.15,
+      yaw,
+      standX: x + Math.sin(yaw) * 1.5,
+      standZ: z + Math.cos(yaw) * 1.5,
     });
-
-    this.environmentGroup.add(g);
-    this.timesSquareGroup = g;
+    this.propColliders.push({ cx: x, cz: z, hw: 2.2, hd: 0.85, h: 1.6, rot: yaw, prop: true });
+    return bench;
   }
 
   buildPark() {
@@ -1512,7 +1599,7 @@ export class ThreeCityEngine {
     gNrm.repeat.copy(gTex.repeat);
     const grass = new THREE.Mesh(
       new THREE.PlaneGeometry(w, dep),
-      new THREE.MeshStandardMaterial({ map: gTex, normalMap: gNrm, normalScale: new THREE.Vector2(0.7, 0.7), color: isDark ? 0x96a891 : 0xf4f8f0, roughness: 0.95 })
+      new THREE.MeshStandardMaterial({ map: gTex, normalMap: gNrm, normalScale: new THREE.Vector2(0.7, 0.7), color: this.atmo.grassTint, roughness: 0.95 })
     );
     grass.rotation.x = -Math.PI / 2;
     grass.position.set(p.cx, 0.08, p.cz);
@@ -1539,14 +1626,100 @@ export class ThreeCityEngine {
       this.environmentGroup.add(court);
     });
 
-    // winding path
-    const pathMat = new THREE.MeshStandardMaterial({ color: isDark ? 0x3a3a3f : 0xcdbb98, roughness: 1 });
-    for (let i = 0; i < 22; i++) {
-      const t = i / 21;
-      const seg = new THREE.Mesh(new THREE.PlaneGeometry(5, dep / 20), pathMat);
-      seg.rotation.x = -Math.PI / 2;
-      seg.position.set(p.cx + Math.sin(t * Math.PI * 3) * w * 0.28, 0.1, p.z0 + t * dep);
-      this.environmentGroup.add(seg);
+    // ── Brick-and-concrete park walkways ─────────────────────────────
+    const PATH_W = 7.5;
+    const brickTex = brickPathTexture(isDark);
+    const brickNrm = normalFromCanvas(brickTex.userData.canvas, 1.5);
+    const pathMat = new THREE.MeshStandardMaterial({
+      map: brickTex,
+      normalMap: brickNrm,
+      normalScale: new THREE.Vector2(0.85, 0.85),
+      color: this.atmo.brickPathTint,
+      roughness: 0.97,
+      metalness: 0,
+    });
+
+    // Build the meandering spine as overlapping quads that follow the curve,
+    // each rotated to face along the path so bricks never shear across a bend.
+    const pathPts = [];
+    const SEG = 46;
+    for (let i = 0; i <= SEG; i++) {
+      const t = i / SEG;
+      pathPts.push(
+        new THREE.Vector2(p.cx + Math.sin(t * Math.PI * 3) * w * 0.28, p.z0 + t * dep)
+      );
+    }
+    const pathGeos = [];
+    for (let i = 0; i < pathPts.length - 1; i++) {
+      const a = pathPts[i];
+      const b = pathPts[i + 1];
+      const dx = b.x - a.x;
+      const dz = b.y - a.y;
+      const len = Math.hypot(dx, dz) + 1.4; // overlap so joints never gap
+      const g = new THREE.PlaneGeometry(PATH_W, len);
+      scaleUV(g, PATH_W / 7.5, len / 7.5);
+      g.rotateX(-Math.PI / 2);
+      g.rotateY(-Math.atan2(dx, dz));
+      g.translate((a.x + b.x) / 2, 0.11, (a.y + b.y) / 2);
+      pathGeos.push(g);
+    }
+    // a cross-path east–west so the park reads as a real network
+    for (let i = 0; i < 14; i++) {
+      const zc = p.z0 + dep * 0.5;
+      const xc = p.x0 + 4 + (i / 13) * (w - 8);
+      const g = new THREE.PlaneGeometry((w - 8) / 14 + 1.2, PATH_W * 0.8);
+      scaleUV(g, ((w - 8) / 14) / 7.5, (PATH_W * 0.8) / 7.5);
+      g.rotateX(-Math.PI / 2);
+      g.translate(xc, 0.11, zc);
+      pathGeos.push(g);
+    }
+    if (pathGeos.length) {
+      const pathMesh = new THREE.Mesh(mergeSimple(pathGeos), pathMat);
+      pathMesh.receiveShadow = true;
+      this.environmentGroup.add(pathMesh);
+    }
+
+    // ── Lamp posts ON the walkway itself ─────────────────────────────
+    // Set just clear of the brick edge, alternating sides, following the same
+    // curve as the path so the spine reads as a real lit promenade at night
+    // and as proper street furniture by day.
+    for (let i = 2; i < pathPts.length - 1; i += 3) {
+      const a = pathPts[i];
+      const b2 = pathPts[i + 1];
+      const dx = b2.x - a.x;
+      const dz = b2.y - a.y;
+      const L = Math.hypot(dx, dz) || 1;
+      // unit normal to the path direction
+      const nx = -dz / L;
+      const nz = dx / L;
+      const side = i % 6 === 2 ? 1 : -1;
+      const off = PATH_W / 2 + 1.6;
+      this.makeVictorianLamp(a.x + nx * off * side, a.y + nz * off * side, {
+        yaw: -Math.atan2(dx, dz),
+      });
+    }
+    // …and down both kerbs of the east–west cross path.
+    {
+      const zc = p.z0 + dep * 0.5;
+      for (let i = 0; i <= 12; i += 2) {
+        const xc = p.x0 + 6 + (i / 12) * (w - 12);
+        [-1, 1].forEach((sdir) => {
+          this.makeVictorianLamp(xc, zc + sdir * (PATH_W * 0.4 + 1.8), { yaw: Math.PI / 2 });
+        });
+      }
+    }
+    // Benches + bins along the spine so the walk isn't just lamps.
+    for (let i = 4; i < pathPts.length - 2; i += 7) {
+      const a = pathPts[i];
+      const b2 = pathPts[i + 1];
+      const dx = b2.x - a.x;
+      const dz = b2.y - a.y;
+      const L = Math.hypot(dx, dz) || 1;
+      const nx = -dz / L;
+      const nz = dx / L;
+      const side = i % 14 === 4 ? -1 : 1;
+      const off = PATH_W / 2 + 2.2;
+      this.addParkBench(a.x + nx * off * side, a.y + nz * off * side, -Math.atan2(dx, dz) + (side > 0 ? Math.PI : 0));
     }
 
     // reservoir pond
@@ -1920,7 +2093,7 @@ export class ThreeCityEngine {
       normalScale: new THREE.Vector2(0.55, 0.55),
       emissiveMap: this.makeFacadeTex("mid", true),
       emissive: new THREE.Color(0xffffff),
-      emissiveIntensity: isDark ? 0.5 : 0.1,
+      emissiveIntensity: this.atmo.windowEmissive,
       roughness: 0.52,
       metalness: 0.24,
       envMapIntensity: 1.15,
@@ -2030,11 +2203,20 @@ export class ThreeCityEngine {
     }
     if (!best) return null;
 
+    const info0 = lotAt(best.slot.lot.cx, best.slot.lot.cz);
+
+    // Times Square towers are NOT stock. The square sells advertising, not
+    // real estate: its buildings stay permanently owned by the city and the
+    // only thing on the market there is the signage bolted to them.
+    if (info0?.district?.archetype === "timessquare") return null;
+
     const floors = Math.max(1, Math.round(best.slot.h / FLOOR_HEIGHT));
-    // Fixed, deterministic ask: the same $5/floor rate as new construction,
-    // plus a premium for the finished structure you're taking over.
-    const priceUSD = Math.round(floors * USD_PER_FLOOR * PREBUILT_PREMIUM);
-    const info = lotAt(best.slot.lot.cx, best.slot.lot.cz);
+
+    // Fixed ask by tier: ordinary blocks → $2 … $10.
+    const t = Math.max(0, Math.min(1, (floors - 3) / 45));
+    const priceUSD = Math.round(SMALL_PRICE_MIN + t * (SMALL_PRICE_MAX - SMALL_PRICE_MIN));
+
+    const info = info0;
     return {
       ...best,
       floors,
@@ -2097,7 +2279,7 @@ export class ThreeCityEngine {
     for (let i = 0; i < 160; i++) {
       treePos.push([gb.x - 60 - Math.random() * 200, -b.halfD + Math.random() * b.cityD]);
     }
-    this.environmentGroup.add(makeTreeField(treePos));
+    this.environmentGroup.add((makeTreeField(treePos)));
 
     // streetlights at major intersections
     if (!this.propColliders) this.propColliders = [];
@@ -2108,7 +2290,7 @@ export class ThreeCityEngine {
       const sl = makeStreetlight();
       sl.position.set(px, 0, pz);
       sl.traverse((o) => { if (o.userData.bloom) o.layers.enable(1); });
-      this.environmentGroup.add(sl);
+      this.environmentGroup.add((sl));
       this.propColliders.push({ cx: px, cz: pz, hw: 0.32, hd: 0.32, h: 8, prop: true });
     });
     // tree trunks are solid too
@@ -2116,9 +2298,8 @@ export class ThreeCityEngine {
       this.propColliders.push({ cx: x, cz: z, hw: 0.45, hd: 0.45, h: 5, prop: true });
     });
     if (this.fountainCollider) this.propColliders.push(this.fountainCollider);
-
-    // Animated NPC pedestrian crowds
-    this.npcSystem = new NpcSystem(this);
+    // NPC crowds are the single heaviest thing in the world, so they are the
+    // last chunk of the deferred build queue rather than part of this pass.
   }
 
   // ── Traffic (strictly on drivable road segments, instanced fleet) ────
@@ -2132,18 +2313,44 @@ export class ThreeCityEngine {
       seed = (seed * 9301 + 49297) % 233280;
       return seed / 233280;
     };
+    const MAX_CARS = 300; // dense enough that every avenue has moving traffic
+    // Times Square is the busiest crossroads in the city — anything running
+    // through (or alongside) the square carries roughly triple the traffic of
+    // an ordinary block.
+    const ts = timesSquareRect();
+    const TS_PAD = 170;
+    const nearTimesSquare = (seg, axis) =>
+      axis === "z"
+        ? seg.x > ts.x0 - TS_PAD && seg.x < ts.x1 + TS_PAD &&
+          seg.z1 > ts.z0 - TS_PAD && seg.z0 < ts.z1 + TS_PAD
+        : seg.z > ts.z0 - TS_PAD && seg.z < ts.z1 + TS_PAD &&
+          seg.x1 > ts.x0 - TS_PAD && seg.x0 < ts.x1 + TS_PAD;
+
+    const seeded = new Set();
     const spawn = (seg, axis) => {
-      if (specs.length >= 64) return;
+      if (specs.length >= MAX_CARS) return;
+      if (seeded.has(seg)) return; // the Times Square pass already filled it
+      seeded.add(seg);
       const len = axis === "z" ? seg.z1 - seg.z0 : seg.x1 - seg.x0;
-      if (len < 120) return;
-      const nCars = Math.min(2, 1 + Math.floor(len / 320));
+      if (len < 55) return;
+      const busy = nearTimesSquare(seg, axis);
+      const nCars = busy
+        ? Math.min(16, 3 + Math.floor(len / 42))
+        : Math.min(6, 1 + Math.floor(len / 110));
       for (let n = 0; n < nCars; n++) {
-        if (specs.length >= 64) return;
+        if (specs.length >= MAX_CARS) return;
         const i = specs.length;
         const bus = i % 13 === 0;
         const carLen = bus ? 13 : 5.4 + rnd() * 1.4;
         const carWid = bus ? 3 : 2.5;
-        const colorHex = bus ? 0xf2b134 : carColors[Math.floor(rnd() * carColors.length)];
+        // Around Times Square most of the traffic is cabs — it is a big part
+        // of why the real crossroads reads yellow from above.
+        const cab = !bus && busy && rnd() < 0.72;
+        const colorHex = bus
+          ? 0xf2b134
+          : cab
+            ? 0xf7c948
+            : carColors[Math.floor(rnd() * carColors.length)];
         specs.push({ len: carLen, wid: carWid, bus, colorHex });
 
         const dir = (i + n) % 2 === 0 ? 1 : -1;
@@ -2155,7 +2362,7 @@ export class ThreeCityEngine {
             baseSpeed: speed,
             currentSpeed: speed,
             x: seg.x + laneOff * (GRID.ROAD_W_AVENUE / 4),
-            z: seg.z0 + rnd() * len,
+            z: seg.z0 + ((n + 0.5) / nCars) * len + (rnd() - 0.5) * (len / nCars) * 0.55,
             rotY: dir > 0 ? 0 : Math.PI,
             min: seg.z0 + 4, max: seg.z1 - 4,
           });
@@ -2164,7 +2371,7 @@ export class ThreeCityEngine {
             axis: "x", dir, speed,
             baseSpeed: speed,
             currentSpeed: speed,
-            x: seg.x0 + rnd() * len,
+            x: seg.x0 + ((n + 0.5) / nCars) * len + (rnd() - 0.5) * (len / nCars) * 0.55,
             z: seg.z + laneOff * (GRID.ROAD_W_STREET / 4),
             rotY: dir > 0 ? Math.PI / 2 : -Math.PI / 2,
             min: seg.x0 + 4, max: seg.x1 - 4,
@@ -2172,13 +2379,17 @@ export class ThreeCityEngine {
         }
       }
     };
+    // Fill the square's approaches before the rest of the grid so the busiest
+    // roads are never starved by the global car cap.
+    segs.avenues.filter((s) => nearTimesSquare(s, "z")).forEach((s) => spawn(s, "z"));
+    segs.streets.filter((s) => nearTimesSquare(s, "x")).forEach((s) => spawn(s, "x"));
     segs.avenues.forEach((s) => spawn(s, "z"));
     segs.streets.forEach((s) => spawn(s, "x"));
 
     this.fleet = createTrafficFleet(specs);
     this.trafficCars.forEach((c, i) => this.fleet.setCar(i, c.x, c.z, c.rotY));
     this.fleet.flush();
-    this.environmentGroup.add(this.fleet.group);
+    this.environmentGroup.add((this.fleet.group));
   }
 
   // ── Data-driven towers ───────────────────────────────────────────────
@@ -2207,35 +2418,53 @@ export class ThreeCityEngine {
       ? Math.max(MIN_BRAND_FLOORS, floorsForAmountINR(sorted[1].currentAmount || 0))
       : 0;
 
+    if (!this.allocatedPlots) {
+      this.allocatedPlots = loadAllocatedPlots();
+    }
+
     sorted.forEach((product, i) => {
       const rank = product.rank || product.allTimeRank || i + 1;
       const amount = product.currentAmount || 0;
       const weight = Math.max(0.02, Math.min(1, amount / top1));
 
-      // 1) a plot the owner explicitly acquired  2) top ranks headline a
-      // district  3) everyone else spirals out from the centre.
+      // Stable plot allocation: A brand's physical plot never moves once assigned!
       const urlKey = String(product.normalizedUrl || product.websiteUrl || "").toLowerCase();
+      const prodKey = String(product.id || urlKey).toLowerCase();
       let place = null;
-      const claim = urlKey && this.claimedPlots[urlKey];
+
+      // 1) Plot explicitly acquired by owner
+      const claim = (urlKey && this.claimedPlots[urlKey]) || (prodKey && this.claimedPlots[prodKey]);
       if (claim) {
         const info = lotAt(claim[0], claim[1]);
         if (info && !placed.has(keyOf(info.lot))) place = { lot: info.lot, bx: info.bx, bz: info.bz };
       }
-      // Rank #1 ALWAYS takes the crown lot at the heart of the city.
-      if (!place && rank === 1) {
-        const cl = crownLot();
-        if (cl && !placed.has(keyOf(cl.lot))) place = cl;
+
+      // 2) Saved plot coordinates from product database record
+      if (!place && product.plotLng != null && product.plotLat != null) {
+        const info = lotAt(product.plotLng, product.plotLat);
+        if (info && !placed.has(keyOf(info.lot))) place = { lot: info.lot, bx: info.bx, bz: info.bz };
       }
-      if (!place && rank > 1 && rank <= nHeroes + 1) {
-        const hp = districtPrimeLot(DISTRICT_META[rank - 2]);
-        if (!placed.has(keyOf(hp.lot))) place = hp;
+
+      // 3) Previously allocated permanent plot for this brand
+      const alloc = (prodKey && this.allocatedPlots[prodKey]) || (urlKey && this.allocatedPlots[urlKey]);
+      if (!place && alloc) {
+        const info = lotAt(alloc[0], alloc[1]);
+        if (info && !placed.has(keyOf(info.lot))) place = { lot: info.lot, bx: info.bx, bz: info.bz };
       }
+
+      // 4) New brand: allocate next stable lot in city and permanently lock it
       if (!place) {
-        let k = rank;
+        let k = i;
         do {
           place = lotForRank(k);
           k++;
-        } while (placed.has(keyOf(place.lot)) && k < rank + 60);
+        } while (placed.has(keyOf(place.lot)) && k < i + 80);
+
+        if (place && place.lot) {
+          if (prodKey) this.allocatedPlots[prodKey] = [place.lot.cx, place.lot.cz];
+          if (urlKey) this.allocatedPlots[urlKey] = [place.lot.cx, place.lot.cz];
+          saveAllocatedPlots(this.allocatedPlots);
+        }
       }
       const { lot, bx, bz } = place;
       const key = keyOf(lot);
@@ -2254,13 +2483,9 @@ export class ThreeCityEngine {
       const lotMin = Math.min(lot.w, lot.d);
       const footprint = lotMin * (0.66 + weight * 0.24) * (rank === 1 ? 1.22 : 1);
 
-      // Height is bid-driven: $200 = 1 floor. Low bids stay short — but every
-      // paid plot is at least a small building, and the #1 landmark is always
-      // guaranteed to tower over the skyline it leads.
-      let floors = Math.max(MIN_BRAND_FLOORS, floorsForAmountINR(amount));
-      if (rank === 1) {
-        floors = Math.max(floors, CROWN_MIN_FLOORS, Math.ceil(runnerUpFloors * 1.3));
-      }
+      // Height is bid-driven: $5 = 1 floor. Every paid plot reflects its
+      // true absolute floor level without artificial height inflation.
+      const floors = Math.max(MIN_BRAND_FLOORS, floorsForAmountINR(amount));
       const height = floors * FLOOR_HEIGHT;
 
       const tower = makeTower({
@@ -2271,6 +2496,7 @@ export class ThreeCityEngine {
         tier,
         accentHex: new THREE.Color(dist.color).getHex(),
         seed: (product.id || rank) * 2654435761,
+        isBrandTower: true,
       });
       tower.position.set(lot.cx, 0, lot.cz);
       tower.name = `brand-landmark-${product.id}`;
@@ -2286,6 +2512,19 @@ export class ThreeCityEngine {
       });
       tower.add(board);
 
+      // Attach Flat Brand Logo Roof directly on top of the building (matching reference design)
+      const topRoofW = (rank === 1 && tower.userData?.topW) ? tower.userData.topW : footprint;
+      const topRoofD = (rank === 1 && tower.userData?.topD) ? tower.userData.topD : footprint;
+      const brandRoof = makeBrandRoofMesh({
+        product,
+        rank,
+        color: dist.color,
+        w: topRoofW,
+        d: topRoofD,
+        height,
+      });
+      tower.add(brandRoof);
+
       tower.userData = {
         product, rank, amount, floors,
         district: dist.name,
@@ -2295,7 +2534,42 @@ export class ThreeCityEngine {
         height: tower.userData.totalHeight || height,
         width: footprint,
         position: new THREE.Vector3(lot.cx, height, lot.cz),
+        brandRoof,
       };
+      // ── Giant billboard mounted FLAT ON the tower's wall ─────────────
+      // Sized to the facade, repeated on all four faces so the owner is
+      // identifiable from any approach — this is the ownership proof.
+      const isCrown = rank === 1;
+      const panelW = footprint * (isCrown ? 0.92 : 0.86);
+      const panelH = isCrown
+        ? Math.min(panelW * 0.72, height * 0.44)
+        : Math.min(panelW * 0.62, height * 0.38);
+      if (panelH > 2.5 && height >= 8) {
+        const panelY = Math.max(panelH / 2 + 1.2, height * 0.50);
+        const wallOffset = isCrown ? 0.45 : 0.3;
+        const faces = [
+          { rot: 0, dx: 0, dz: footprint / 2 + wallOffset },
+          { rot: Math.PI, dx: 0, dz: -footprint / 2 - wallOffset },
+          { rot: Math.PI / 2, dx: footprint / 2 + wallOffset, dz: 0 },
+          { rot: -Math.PI / 2, dx: -footprint / 2 - wallOffset, dz: 0 },
+        ];
+        tower.userData.facadePanels = [];
+        faces.forEach((f) => {
+          const fb = makeFacadeBillboard({
+            w: panelW,
+            h: panelH,
+            product,
+            rank,
+            amountText: formatMoneyShort(amount),
+            color: dist.color,
+          });
+          fb.group.position.set(f.dx, panelY, f.dz);
+          fb.group.rotation.y = f.rot;
+          tower.add(fb.group);
+          tower.userData.facadePanels.push(fb);
+        });
+      }
+
       tower.traverse((o) => { if (o.isMesh && o.userData.bloom) o.layers.enable(1); });
       this.brandTowersGroup.add(tower);
       if (rank === 1) this._crownTower = tower;
@@ -2343,6 +2617,13 @@ export class ThreeCityEngine {
       billboard.traverse((o) => { if (o.isMesh && o.userData.bloom) o.layers.enable(1); });
       this.brandBillboardsGroup.add(billboard);
     });
+
+    this._syncPlanTowers();
+  }
+
+  /** Rebuild the heat field after any bid/ownership change. */
+  refreshHeatmap() {
+    if (this._heatOn) this._buildHeatmap();
   }
 
   setBillboardRecords(records) {
@@ -2449,7 +2730,8 @@ export class ThreeCityEngine {
       this.cancelIntro();
       if (this.gameMode) return;
       e.preventDefault();
-      this.spherical.radius = THREE.MathUtils.clamp(this.spherical.radius + e.deltaY * 1.1, 320, 3600);
+      const factor = this.spherical.radius > 250 ? 1.1 : 0.45;
+      this.spherical.radius = THREE.MathUtils.clamp(this.spherical.radius + e.deltaY * factor, 18, 3800);
       this.updateCameraFromSpherical();
     };
 
@@ -2490,8 +2772,8 @@ export class ThreeCityEngine {
         const c = touchCenter(e.touches);
         this.spherical.radius = THREE.MathUtils.clamp(
           this.spherical.radius * (this._touch.dist / Math.max(1, d)),
-          320,
-          3600
+          18,
+          3800
         );
         const panK = (this.spherical.radius / 1000) * 1.3;
         const dx = c.x - this._touch.x;
@@ -2539,6 +2821,13 @@ export class ThreeCityEngine {
     dom.addEventListener("touchend", this._onTouchEnd, { passive: true });
     dom.addEventListener("touchcancel", this._onTouchEnd, { passive: true });
     window.addEventListener("resize", this._onResize);
+
+    // Entering / leaving the city unmounts the site header, which resizes the
+    // container without ever firing a window resize — watch the box directly.
+    if (typeof ResizeObserver !== "undefined") {
+      this._resizeObs = new ResizeObserver(() => this._onResize());
+      this._resizeObs.observe(this.container);
+    }
   }
 
   _setupHoverHighlightSystem() {
@@ -2595,11 +2884,18 @@ export class ThreeCityEngine {
     this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
-    // 1. Raycast against brand towers and building ownership boards
-    const hits = this.raycaster.intersectObjects(this.brandTowersGroup.children, true);
+    // 1. Raycast against brand towers and building ownership boards.
+    // In 2D the towers themselves are not in the scene — the flat map's
+    // footprints stand in for them and carry the same userData.
+    const towerTargets =
+      this.viewMode === "2D" && this.planTowersGroup
+        ? this.planTowersGroup.children
+        : this.brandTowersGroup.children;
+    const hits = this.raycaster.intersectObjects(towerTargets, true);
     if (hits.length) {
       let root = hits[0].object;
-      while (root.parent && root.parent !== this.brandTowersGroup) root = root.parent;
+      const rootGroup = this.viewMode === "2D" ? this.planTowersGroup : this.brandTowersGroup;
+      while (root.parent && root.parent !== rootGroup) root = root.parent;
       if (root.userData?.product) {
         return {
           type: "tower",
@@ -2640,10 +2936,43 @@ export class ThreeCityEngine {
     const pt = new THREE.Vector3();
     if (this.raycaster.ray.intersectPlane(this._groundPlane, pt)) {
       const info = lotAt(pt.x, pt.z);
-      if (info) {
-        const taken = this.brandTowersGroup.children.some(
+      if (info && info.district?.archetype !== "timessquare") {
+        const existingTower = this.brandTowersGroup.children.find(
           (t) => Math.abs(t.position.x - info.lot.cx) < 2 && Math.abs(t.position.z - info.lot.cz) < 2
         );
+        const slotIndex = this.lotIndexByKey?.get(keyOf(info.lot));
+        const fillerSlot = slotIndex != null ? this.fillerSlots?.[slotIndex] : null;
+
+        const fixedUSD = getPlotFixedPriceUSD(info.district.id);
+        const fixedINR = fixedUSD * 83;
+
+        if (existingTower) {
+          return {
+            type: "tower",
+            object: existingTower,
+            product: existingTower.userData.product,
+            position: existingTower.position,
+            height: existingTower.userData.height || 60,
+            width: existingTower.userData.width || 20,
+            color: existingTower.userData.color || "#F05A38",
+            colorHex: existingTower.userData.colorHex || 0xf05a38,
+            plot: {
+              plotNumber: info.plotNumber,
+              districtId: info.district.id,
+              districtName: info.district.name,
+              color: info.district.color,
+              archetype: info.district.archetype,
+              worldX: info.lot.cx,
+              worldZ: info.lot.cz,
+              lotW: info.lot.w,
+              lotD: info.lot.d,
+              taken: true,
+              fixedPriceUSD: fixedUSD,
+              fixedPriceINR: fixedINR,
+            },
+          };
+        }
+
         return {
           type: "plot",
           plot: {
@@ -2656,8 +2985,12 @@ export class ThreeCityEngine {
             worldZ: info.lot.cz,
             lotW: info.lot.w,
             lotD: info.lot.d,
-            taken,
+            taken: false,
+            fixedPriceUSD: fixedUSD,
+            fixedPriceINR: fixedINR,
           },
+          height: fillerSlot?.h || 20,
+          fillerSlot,
           position: new THREE.Vector3(info.lot.cx, 0.2, info.lot.cz),
           width: info.lot.w,
           color: info.district.color || "#0284c7",
@@ -2708,12 +3041,19 @@ export class ThreeCityEngine {
       this.hoverGroundRing.scale.set(7, 7, 7);
       this.hoverBeacon.visible = false;
     } else if (hit.type === "plot") {
-      this.hoverBoxHelper.visible = false;
+      this.hoverBoxHelper.visible = true;
+      const halfW = (hit.width || 20) / 2;
+      const halfD = (hit.plot?.lotD || hit.width || 20) / 2;
+      const h = hit.height || 20;
+      this.hoverBoxHelper.box.set(
+        new THREE.Vector3(hit.position.x - halfW, 0, hit.position.z - halfD),
+        new THREE.Vector3(hit.position.x + halfW, h, hit.position.z + halfD)
+      );
       this.hoverGroundRing.position.set(hit.position.x, 0.26, hit.position.z);
       const sz = (hit.width || 20) * 0.7;
       this.hoverGroundRing.scale.set(sz, sz, sz);
       this.hoverBeacon.visible = true;
-      this.hoverBeacon.position.set(hit.position.x, 14, hit.position.z);
+      this.hoverBeacon.position.set(hit.position.x, h + 14, hit.position.z);
     }
   }
 
@@ -2744,11 +3084,181 @@ export class ThreeCityEngine {
     return { x: (v.x * 0.5 + 0.5) * w, y: (-(v.y * 0.5) + 0.5) * h, visible: v.z <= 1 };
   }
 
+  /** Animate a newly acquired building rising up from the ground with shockwave & sparks */
+  animateBuildingRise(tower, colorHex = 0x6366f1) {
+    if (!tower) return;
+
+    // Start with the tower scaled down to ground level
+    tower.scale.set(1, 0.001, 1);
+    const targetH = tower.userData?.height || 28;
+
+    // 1. Create an expanding glowing ground shockwave ring around the plot foundation
+    const ringGeo = new THREE.RingGeometry(1, 4, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: colorHex,
+      transparent: true,
+      opacity: 0.95,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const groundShockwave = new THREE.Mesh(ringGeo, ringMat);
+    groundShockwave.rotation.x = -Math.PI / 2;
+    groundShockwave.position.set(tower.position.x, 0.28, tower.position.z);
+    groundShockwave.userData.bloom = true;
+    groundShockwave.layers.enable(1);
+    this.scene.add(groundShockwave);
+
+    // 2. Create energetic construction spark particles
+    const particleCount = 45;
+    const pGeo = new THREE.BufferGeometry();
+    const posArr = new Float32Array(particleCount * 3);
+    const velArr = [];
+    for (let i = 0; i < particleCount; i++) {
+      posArr[i * 3] = (Math.random() - 0.5) * (tower.userData?.width || 14);
+      posArr[i * 3 + 1] = Math.random() * 2;
+      posArr[i * 3 + 2] = (Math.random() - 0.5) * (tower.userData?.width || 14);
+      velArr.push({
+        vx: (Math.random() - 0.5) * 6,
+        vy: 12 + Math.random() * 18,
+        vz: (Math.random() - 0.5) * 6,
+      });
+    }
+    pGeo.setAttribute("position", new THREE.BufferAttribute(posArr, 3));
+    const pMat = new THREE.PointsMaterial({
+      color: 0xffd700,
+      size: 1.6,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const sparks = new THREE.Points(pGeo, pMat);
+    sparks.position.copy(tower.position);
+    sparks.userData.bloom = true;
+    sparks.layers.enable(1);
+    this.scene.add(sparks);
+
+    // 3. Pan camera to frame the rising building up front!
+    this.focusTower(tower);
+
+    // 4. Animate the rising skyscraper over 2.2 seconds with smooth cubic ease
+    let startTime = null;
+    const duration = 2200;
+
+    const step = (now) => {
+      if (!startTime) startTime = now;
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+
+      // Smooth elastic ease-out
+      const ease = 1 - Math.pow(1 - progress, 3.2);
+
+      // Vertically grow the building from ground
+      tower.scale.y = Math.max(0.001, ease);
+
+      // Animate ground shockwave expansion & fade
+      const ringScale = 1 + progress * 7;
+      groundShockwave.scale.set(ringScale, ringScale, 1);
+      ringMat.opacity = Math.max(0, (1 - progress) * 0.95);
+
+      // Animate particle sparks rising
+      const dtSec = 0.016;
+      const positions = pGeo.attributes.position.array;
+      for (let i = 0; i < particleCount; i++) {
+        positions[i * 3] += velArr[i].vx * dtSec;
+        positions[i * 3 + 1] += velArr[i].vy * dtSec;
+        positions[i * 3 + 2] += velArr[i].vz * dtSec;
+        velArr[i].vy -= 9.8 * dtSec;
+      }
+      pGeo.attributes.position.needsUpdate = true;
+      pMat.opacity = Math.max(0, 1 - progress * 1.1);
+
+      this.updateCameraFromSpherical();
+
+      if (progress < 1) {
+        requestAnimationFrame(step);
+      } else {
+        // Complete! Ensure exact scale and cleanup effects
+        tower.scale.set(1, 1, 1);
+        this.scene.remove(groundShockwave);
+        disposeDeep(groundShockwave);
+        this.scene.remove(sparks);
+        disposeDeep(sparks);
+
+        // Highlight and focus the new building
+        if (tower.userData?.product) {
+          this.onSelectProduct(tower.userData.product, {
+            position: tower.position,
+            height: targetH,
+          });
+        }
+      }
+    };
+    requestAnimationFrame(step);
+  }
+
+  claimPlotAndRise(product, x, z) {
+    if (!product) return;
+    const urlKey = String(product.normalizedUrl || product.websiteUrl || "").toLowerCase();
+    const prodKey = String(product.id || urlKey).toLowerCase();
+
+    // 1. Save claim
+    if (urlKey) this.claimedPlots[urlKey] = [x, z];
+    if (prodKey) this.claimedPlots[prodKey] = [x, z];
+    saveClaimedPlots(this.claimedPlots);
+
+    if (!this.allocatedPlots) this.allocatedPlots = loadAllocatedPlots();
+    if (urlKey) this.allocatedPlots[urlKey] = [x, z];
+    if (prodKey) this.allocatedPlots[prodKey] = [x, z];
+    saveAllocatedPlots(this.allocatedPlots);
+
+    // 2. Ensure product is in this.products
+    const existingIdx = this.products.findIndex(
+      (p) =>
+        (p.id && String(p.id) === String(product.id)) ||
+        (p.websiteUrl && String(p.websiteUrl).toLowerCase() === urlKey)
+    );
+    if (existingIdx >= 0) {
+      this.products[existingIdx] = { ...this.products[existingIdx], ...product, plotLng: x, plotLat: z };
+    } else {
+      this.products = [
+        {
+          id: product.id || Date.now(),
+          websiteName: product.websiteName || (urlKey ? urlKey.split(".")[0].toUpperCase() : "New Skyscraper"),
+          websiteUrl: product.websiteUrl || urlKey,
+          currentAmount: product.currentAmount || 1000,
+          categoryId: product.categoryId || 1,
+          plotLng: x,
+          plotLat: z,
+          ...product,
+        },
+        ...this.products,
+      ];
+    }
+
+    // 3. Re-render city
+    this.syncProducts(this.products);
+
+    // 4. Find the newly built tower at (x, z) and trigger the rise animation!
+    const newlyCreatedTower = this.brandTowersGroup.children.find(
+      (t) => Math.abs(t.position.x - x) < 2 && Math.abs(t.position.z - z) < 2
+    );
+    if (newlyCreatedTower) {
+      this.animateBuildingRise(newlyCreatedTower, newlyCreatedTower.userData.colorHex || 0x6366f1);
+    }
+  }
+
   /** Persist that `urlKey` owns the plot at (x,z); next syncProducts renders there. */
   claimPlot(urlKey, x, z) {
     if (!urlKey) return;
-    this.claimedPlots[String(urlKey).toLowerCase()] = [x, z];
+    const k = String(urlKey).toLowerCase();
+    this.claimedPlots[k] = [x, z];
     saveClaimedPlots(this.claimedPlots);
+    if (!this.allocatedPlots) this.allocatedPlots = loadAllocatedPlots();
+    this.allocatedPlots[k] = [x, z];
+    saveAllocatedPlots(this.allocatedPlots);
+    this.syncProducts(this.products);
   }
 
   claimBillboard(billboardId, brandData) {
@@ -2778,26 +3288,47 @@ export class ThreeCityEngine {
   }
 
   _panTo(endTarget, endRadius, endPhi) {
+    if (this._panRaf) cancelAnimationFrame(this._panRaf);
     const startT = this.target.clone();
     const startR = this.spherical.radius;
     const startPhi = this.spherical.phi;
     let p = 0;
     const step = () => {
-      p = Math.min(1, p + 0.05);
+      p = Math.min(1, p + 0.055);
       const e = 1 - Math.pow(1 - p, 3);
       this.target.lerpVectors(startT, endTarget, e);
       this.spherical.radius = THREE.MathUtils.lerp(startR, endRadius, e);
       if (endPhi != null) this.spherical.phi = THREE.MathUtils.lerp(startPhi, endPhi, e);
       this.updateCameraFromSpherical();
-      if (p < 1) requestAnimationFrame(step);
+      if (p < 1) {
+        this._panRaf = requestAnimationFrame(step);
+      } else {
+        this._panRaf = null;
+      }
     };
     step();
   }
 
   focusTower(tower) {
-    if (tower.userData?.product) this.onSelectProduct(tower.userData.product);
+    if (!tower) return;
+    if (tower.userData?.product) {
+      this.onSelectProduct(tower.userData.product, {
+        position: tower.position,
+        height: tower.userData?.height || 28,
+      });
+    }
     const t = tower.position;
-    this._panTo(new THREE.Vector3(t.x, 20, t.z + 40), 480, Math.PI / 3.4);
+    const h = tower.userData?.height || 28;
+    const w = tower.userData?.width || 12;
+
+    // Center camera at mid-height of the building facade so both billboard and roof plaque are framed
+    const targetCenter = new THREE.Vector3(t.x, h * 0.46, t.z);
+
+    // Frame the complete building end-to-end up front on mobile and desktop
+    const optimalRadius = Math.max(26, Math.min(75, h * 1.35 + w * 0.6));
+
+    // Smoothly pan camera up front to show the complete building in detail
+    this._panTo(targetCenter, optimalRadius, Math.PI / 2.65);
   }
 
   focusBillboard(billboard) {
@@ -2875,21 +3406,72 @@ export class ThreeCityEngine {
   }
 
   zoomIn() {
-    this.spherical.radius = Math.max(300, this.spherical.radius - 170);
+    this.spherical.radius = Math.max(18, this.spherical.radius - Math.max(25, this.spherical.radius * 0.25));
     this.updateCameraFromSpherical();
   }
   zoomOut() {
-    this.spherical.radius = Math.min(3200, this.spherical.radius + 170);
+    this.spherical.radius = Math.min(3800, this.spherical.radius + Math.max(25, this.spherical.radius * 0.25));
     this.updateCameraFromSpherical();
   }
 
-  setTheme(theme) {
-    if (theme === this.theme) return;
-    this.theme = theme;
+  /**
+   * Which of the three looks the city should be wearing.
+   *
+   * Dark chrome always means a night city — that is the whole point of the
+   * toggle. Light chrome means a lit city, and the clock picks midday sun vs.
+   * golden hour; asked for light at 2am, it serves day rather than fighting
+   * the user's explicit choice.
+   */
+  _resolveTod() {
+    if (this._todOverride) return this._todOverride;
+    if (this.uiTheme === "dark") return "night";
+    const clock = currentTimeOfDay();
+    return clock === "night" ? "day" : clock;
+  }
+
+  /** Repaint the world if the resolved look actually changed. */
+  _applyTod() {
+    const next = this._resolveTod();
+    if (next === this.tod) return false;
+    this.tod = next;
+    this.atmo = presetFor(next);
+    this.theme = this.atmo.dark ? "dark" : "light";
     this._rebuild();
+    return true;
+  }
+
+  /**
+   * The site's light/dark switch drives the CITY too — flipping to light with
+   * a dark city underneath was the bug. ThemeContext flips this on its own at
+   * dusk and dawn, so this is also how the city goes dark at night.
+   */
+  setTheme(theme) {
+    if (theme === this.uiTheme) return;
+    this.uiTheme = theme;
+    this._applyTod();
+  }
+
+  /** Pin a specific look for debugging. `null` hands control back. */
+  setTimeOfDay(tod) {
+    this._todOverride = tod || null;
+    this._applyTod();
+  }
+
+  /**
+   * Cheap poll (once a minute) so a session left open rolls from midday into
+   * golden hour on its own. Never rebuilds mid-walk or mid-intro — the swap is
+   * deferred until the player is back on the map.
+   */
+  _checkClock() {
+    const now = performance.now();
+    if (this._clockAt && now - this._clockAt < 60000) return;
+    this._clockAt = now;
+    if (this.gameMode || this.introPlaying) return;
+    this._applyTod();
   }
 
   _rebuild() {
+    this._cancelBuildQueue();
     const products = this.products;
     this.fleet?.dispose();
     this.fleet = null;
@@ -2916,30 +3498,55 @@ export class ThreeCityEngine {
       this.brandBillboardsGroup.remove(c);
       disposeGroup(c);
     }
+    // The plan layer is palette-dependent, so it is thrown away here and
+    // lazily rebuilt the next time 2D is opened.
+    if (this.planGroup) {
+      this.scene.remove(this.planGroup);
+      disposeDeep(this.planGroup);
+      this.planGroup = null;
+      this.planTowersGroup = null;
+    }
     this.trafficCars = [];
     this.movingBoats = [];
     this.waters = [];
+    // These are repopulated by buildAll(); without the reset every rebuild
+    // would stack a second copy of every collider and bench on the old ones.
+    this.propColliders = [];
+    this.parkBenches = [];
+    this.timesSquareColliders = [];
+    this._solids = null;
+    this.npcSystem?.dispose();
+    this.npcSystem = null;
 
-    const isDark = this.theme === "dark";
-    this.renderer.toneMappingExposure = isDark ? 0.9 : 1.02;
-    this.scene.fog.color.setHex(isDark ? 0x0b1222 : 0xd7e3ec);
+    this.renderer.toneMappingExposure = this.atmo.exposure;
+    this._fog.color.setHex(this.atmo.fogColor);
 
     this.buildAll();
     this.scene.add(this.environmentGroup, this.fillerGroup);
     this.syncProducts(products);
+    // theme rebuild wipes the scene — restore whatever view/overlay was active
+    if (this.viewMode === "2D") this._applyFlatten(true);
+    if (this._heatOn) this._buildHeatmap();
     this.onProjectUpdate();
   }
 
   animate() {
     this.animFrameId = requestAnimationFrame(() => this.animate());
-    const dt = Math.min(this.clock.getDelta(), 0.05);
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const dt = Math.min((now - (this._lastTime || now)) / 1000, 0.05);
+    this._lastTime = now;
     this._trackPerf(dt);
+    this._checkClock();
 
-    if (this.trafficLightSystem) {
+    // The flat map has no traffic, crowds, water or weather to simulate —
+    // skipping the whole 3D update pass is most of why 2D is cheap.
+    const live = this.viewMode !== "2D";
+
+    if (live && this.trafficLightSystem) {
       this.trafficLightSystem.update(dt);
     }
 
-    if (this.fleet) {
+    if (live && this.fleet) {
       for (let i = 0; i < this.trafficCars.length; i++) {
         const c = this.trafficCars[i];
         const speedFactor = this.trafficLightSystem
@@ -2970,42 +3577,53 @@ export class ThreeCityEngine {
       }
       this.fleet.flush();
     }
-    this.movingBoats.forEach((b) => {
+    if (live) this.movingBoats.forEach((b) => {
       b.position.z += b.userData.speed * dt * 60;
       const span = b.userData.max - b.userData.min;
       if (b.position.z > b.userData.max) b.position.z -= span;
       if (b.position.z < b.userData.min) b.position.z += span;
     });
-    this.waters.forEach((w) => {
+    if (live) this.waters.forEach((w) => {
       if (w.material?.uniforms?.time) w.material.uniforms.time.value += dt;
     });
-    this.clouds.forEach((c) => {
+    if (live) this.clouds.forEach((c) => {
       c.position.x += c.userData.drift * dt;
       if (c.position.x > c.userData.wrapX) c.position.x = -c.userData.wrapX;
     });
 
-    this.fountain?.update(dt);
+    if (live) this.fountain?.update(dt);
 
     // Times Square neon: each panel breathes on its own phase so the canyon
     // shimmers the way a real ad wall does.
-    if (this._tsPanels) {
+    if (live && this._tsPanels) {
       this._tsT = (this._tsT || 0) + dt;
-      const base = this.theme === "dark" ? 2.0 : 0.9;
       for (let i = 0; i < this._tsPanels.length; i++) {
         const pn = this._tsPanels[i];
+        // Ad screens sit at the signage level, not the neon level — driving a
+        // wall of them at neon brightness is what blew the square out before.
+        const base = pn.userData.baseEmissive ?? this.atmo.neonIntensity;
         pn.material.emissiveIntensity =
-          base + Math.sin(this._tsT * pn.userData.pulse + i) * base * 0.42;
+          base + Math.sin(this._tsT * pn.userData.pulse + i) * base * 0.22;
+      }
+    }
+
+    // Wall-mounted owner billboards
+    if (live && this.brandTowersGroup) {
+      this._fbT = (this._fbT || 0) + dt;
+      for (const tw of this.brandTowersGroup.children) {
+        const panels = tw.userData.facadePanels;
+        if (panels) for (let i = 0; i < panels.length; i++) panels[i].tick(this._fbT + i * 0.7);
       }
     }
 
     // Live billboard screens (scrolling ticker / pulsing CTA)
-    if (this.brandBillboardsGroup) {
+    if (live && this.brandBillboardsGroup) {
       this._bbT = (this._bbT || 0) + dt;
       for (const b of this.brandBillboardsGroup.children) {
         b.userData.tick?.(this._bbT, dt);
       }
     }
-    this.npcSystem?.update(dt);
+    if (live) this.npcSystem?.update(dt);
 
     // #1 landmark flourish — counter-rotating halos + a breathing beacon
     const crown = this._crownTower;
@@ -3023,7 +3641,8 @@ export class ThreeCityEngine {
     // Third-person game mode drives the camera + player each frame.
     if (this.gameHook) this.gameHook(dt);
 
-    if (this.usePostFX && this.postfx) this.postfx.render();
+    // Post-processing (selective bloom) is pure waste over unlit map geometry.
+    if (live && this.usePostFX && this.postfx) this.postfx.render();
     else if (this.renderer && this.scene && this.camera) this.renderer.render(this.scene, this.camera);
   }
 
@@ -3061,12 +3680,367 @@ export class ThreeCityEngine {
     this.postfx?.setSize(w, h);
   }
 
+  // ── 2D / 3D view mode ───────────────────────────────────────────────
+  /**
+   * "3D" = the isometric city. "2D" = a real street map.
+   *
+   * The 2D view is NOT the 3D scene squashed flat — that only ever produced a
+   * jumble of stretched facades and raking shadows seen from above. It is a
+   * purpose-built PLAN LAYER drawn the way a street map is drawn: land wash,
+   * water, parks, block fills, cased roads with the arterials picked out in
+   * yellow, and a footprint for every building. Everything is unlit
+   * MeshBasicMaterial and merged per colour, so the map is a handful of draw
+   * calls and the entire 3D world (plus its lights, shadows and post-processing)
+   * switches off while it is up.
+   */
+
+  /** Flat-map colour palette for the current theme. */
+  _planPalette() {
+    return this.theme === "dark"
+      ? {
+          land: 0x1b1f24,
+          block: 0x24292f,
+          green: 0x1f3326,
+          water: 0x16303f,
+          roadCase: 0x14181d,
+          roadFill: 0x3a4149,
+          roadMajor: 0x5c5330,
+          plaza: 0x2c3138,
+          building: 0x353c44,
+          buildingTop: 0x3e454e,
+        }
+      : {
+          land: 0xf2efe9,
+          block: 0xeae6de,
+          green: 0xcfe8c8,
+          water: 0xa9d9f2,
+          roadCase: 0xe0dbd2,
+          roadFill: 0xffffff,
+          roadMajor: 0xfbd88f,
+          plaza: 0xe7e2d8,
+          building: 0xdcd6cb,
+          buildingTop: 0xd2ccc0,
+        };
+  }
+
+  /** One flat horizontal quad, ready to merge. */
+  _planQuad(cx, cz, w, d, rotY = 0) {
+    const g = new THREE.PlaneGeometry(w, d);
+    g.rotateX(-Math.PI / 2);
+    if (rotY) g.rotateY(rotY);
+    g.translate(cx, 0, cz);
+    return g;
+  }
+
+  /**
+   * Build the static half of the map (land, water, parks, roads, blocks and
+   * pre-built footprints). Runs once, lazily, the first time 2D is opened —
+   * so nobody pays for it unless they use it.
+   */
+  _buildPlanLayer() {
+    if (this.planGroup) return;
+    const P = this._planPalette();
+    const b = worldBounds();
+    const o = ocean();
+    const gb = greenbelt();
+    const pk = parkRect();
+    const pz = plazaRect();
+    const ts = timesSquareRect();
+
+    const group = new THREE.Group();
+    group.name = "plan-layer";
+    group.visible = false;
+
+    const layer = (geos, color, y, { opacity = 1, order = 0 } = {}) => {
+      if (!geos.length) return null;
+      geos.forEach((g) => g.translate(0, y, 0));
+      const mesh = new THREE.Mesh(
+        mergeSimple(geos),
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: opacity < 1,
+          opacity,
+          depthWrite: false,
+        })
+      );
+      mesh.renderOrder = order;
+      group.add(mesh);
+      return mesh;
+    };
+
+    // 1. Land wash covering everything the camera can see.
+    layer([this._planQuad(0, 0, b.cityW * 6, b.cityD * 4)], P.land, 0, { order: 0 });
+
+    // 2. Water — the eastern ocean and the western river.
+    layer(
+      [
+        this._planQuad(o.x, (o.z0 + o.z1) / 2, o.w * 2.2, o.depthSpan),
+        this._planQuad(gb.x - gb.w * 0.4, 0, gb.w * 0.5, gb.span),
+      ],
+      P.water,
+      0.2,
+      { order: 1 }
+    );
+
+    // 3. Green: the greenbelt strip, Central Park and the plaza gardens.
+    layer(
+      [
+        this._planQuad(gb.x + gb.w * 0.25, 0, gb.w * 0.6, gb.span),
+        this._planQuad(pk.cx, pk.cz, pk.x1 - pk.x0, pk.z1 - pk.z0),
+        this._planQuad(pz.cx, pz.cz, (pz.x1 - pz.x0) * 0.94, (pz.z1 - pz.z0) * 0.94),
+      ],
+      P.green,
+      0.4,
+      { order: 2 }
+    );
+
+    // 4. Built-up block fills — the grey "city" tone between the roads.
+    const blocks = [];
+    forEachBlock((blk) => blocks.push(this._planQuad(blk.cx, blk.cz, blk.w, blk.d)));
+    layer(blocks, P.block, 0.6, { order: 3 });
+
+    // 5. Times Square's pedestrian granite.
+    layer(
+      [this._planQuad(ts.cx, ts.cz, ts.x1 - ts.x0, ts.z1 - ts.z0)],
+      P.plaza,
+      0.7,
+      { order: 4 }
+    );
+
+    // 6. Roads: casing first, then the fill inside it — the two-tone edge is
+    //    what makes a drawn map read as a road network rather than grey bars.
+    const segs = this._roadSegs || roadSegments();
+    const CASE = 7; // extra width of the casing on each side
+    const cases = [];
+    const fills = [];
+    const majors = [];
+    segs.avenues.forEach((a) => {
+      const len = a.z1 - a.z0;
+      if (len < 8) return;
+      const cz = (a.z0 + a.z1) / 2;
+      cases.push(this._planQuad(a.x, cz, a.w + CASE, len));
+      (a.major ? majors : fills).push(this._planQuad(a.x, cz, a.w, len));
+    });
+    segs.streets.forEach((st) => {
+      const len = st.x1 - st.x0;
+      if (len < 8) return;
+      const cx = (st.x0 + st.x1) / 2;
+      cases.push(this._planQuad(cx, st.z, len, st.w + CASE));
+      (st.major ? majors : fills).push(this._planQuad(cx, st.z, len, st.w));
+    });
+    layer(cases, P.roadCase, 0.9, { order: 5 });
+    layer(fills, P.roadFill, 1.0, { order: 6 });
+    layer(majors, P.roadMajor, 1.05, { order: 7 });
+
+    // 7. Every pre-built structure as a footprint.
+    const foot = [];
+    (this.fillerSlots || []).forEach((sl) => {
+      if (!sl || !sl.plan?.fill) return;
+      foot.push(this._planQuad(sl.lot.cx, sl.lot.cz, sl.w, sl.dep));
+    });
+    layer(foot, P.building, 1.2, { order: 8 });
+
+    // Owned towers live in their own group so they can be rebuilt per bid and
+    // stay individually pickable.
+    this.planTowersGroup = new THREE.Group();
+    this.planTowersGroup.name = "plan-towers";
+    group.add(this.planTowersGroup);
+
+    this.planGroup = group;
+    this.scene.add(group);
+    this._syncPlanTowers();
+  }
+
+  /**
+   * Footprints for the brand-owned towers, tinted by district and carrying the
+   * same userData the 3D towers do — so clicking a building on the map opens
+   * exactly the popup clicking it in 3D would.
+   */
+  _syncPlanTowers() {
+    const grp = this.planTowersGroup;
+    if (!grp) return;
+    while (grp.children.length) {
+      const c = grp.children[0];
+      grp.remove(c);
+      c.geometry?.dispose();
+      c.material?.dispose();
+    }
+    this.brandTowersGroup.children.forEach((tower) => {
+      const w = tower.userData.width || 20;
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(w, w),
+        new THREE.MeshBasicMaterial({
+          color: tower.userData.colorHex ?? 0xf05a38,
+          transparent: true,
+          opacity: 0.9,
+          depthWrite: false,
+        })
+      );
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.set(tower.position.x, 1.4, tower.position.z);
+      mesh.renderOrder = 9;
+      mesh.userData = tower.userData; // same product / rank / colour payload
+      grp.add(mesh);
+    });
+  }
+
+  setViewMode(mode) {
+    const twoD = mode === "2D";
+    if (this.viewMode === (twoD ? "2D" : "3D")) return;
+    this.viewMode = twoD ? "2D" : "3D";
+
+    const b = worldBounds();
+    // Deliberately INSTANT. A tweened camera flight between two completely
+    // different renderings meant running both worlds at once for a second and
+    // a half; the cut is snapped here and the UI covers it with a shutter
+    // blink, which is cheaper and reads better.
+    if (twoD) {
+      this._saved3D = {
+        radius: this.spherical.radius,
+        phi: this.spherical.phi,
+        theta: this.spherical.theta,
+        target: this.target.clone(),
+      };
+      this.target.set(0, 0, 0);
+      this.spherical.set(Math.max(b.cityD * 1.15, 2400), 0.02, 0);
+    } else {
+      const sv = this._saved3D;
+      this.target.copy(sv ? sv.target : new THREE.Vector3(0, 0, 0));
+      this.spherical.set(
+        sv ? sv.radius : 2050,
+        sv ? sv.phi : Math.PI / 3.5,
+        sv ? sv.theta : Math.PI * 0.18
+      );
+    }
+    this.updateCameraFromSpherical();
+    this._applyFlatten(twoD);
+    this.onProjectUpdate();
+  }
+
+  /**
+   * Swap the whole world for the flat map, and back.
+   *
+   * In 2D the 3D city is not rendered at all — no lights, no shadows, no
+   * post-processing, no NPC or traffic updates. That is the optimisation the
+   * old "squash everything" approach could never give.
+   */
+  _applyFlatten(flat) {
+    if (flat) this._buildPlanLayer();
+    if (this.planGroup) this.planGroup.visible = flat;
+
+    // The entire 3D world steps aside.
+    this.environmentGroup.visible = !flat;
+    this.fillerGroup.visible = !flat;
+    this.brandTowersGroup.visible = !flat;
+    this.brandBillboardsGroup.visible = !flat;
+    if (this.sky) this.sky.visible = !flat;
+    this.clouds?.forEach((c) => (c.visible = !flat));
+    this.skyBodies?.forEach((o) => (o.visible = !flat));
+    if (this.hoverHighlightGroup) this.hoverHighlightGroup.visible = false;
+
+    // The lights are deliberately left ALONE. Toggling light.visible or
+    // shadowMap.enabled changes the renderer's lights hash and forces every
+    // material to recompile on each switch — a visible hitch, in exchange for
+    // nothing: the map is unlit MeshBasicMaterial and every lit object is
+    // already hidden, so the shadow pass renders an empty scene.
+    this.renderer.shadowMap.autoUpdate = !flat;
+    this.renderer.toneMappingExposure = flat ? 1.0 : this.atmo.exposure;
+    this.scene.fog = flat ? null : this._fog;
+    this.scene.background = flat
+      ? new THREE.Color(this._planPalette().land)
+      : null;
+  }
+
+  // ── Heatmap overlay ─────────────────────────────────────────────────
+  /**
+   * Paints the city by money: every claimed lot gets a coloured disc scaled to
+   * its bid, blended into a single canvas so hot districts glow red and quiet
+   * ones stay blue — the classic value heatmap, laid over the real grid.
+   */
+  setHeatmap(on) {
+    if (on === this._heatOn) return;
+    this._heatOn = on;
+    if (!on) {
+      if (this._heatMesh) this._heatMesh.visible = false;
+      return;
+    }
+    this._buildHeatmap();
+    if (this._heatMesh) this._heatMesh.visible = true;
+  }
+
+  _buildHeatmap() {
+    const b = worldBounds();
+    const spanX = b.cityW + GRID.SHORE_MARGIN * 2 + 200;
+    const spanZ = b.cityD + GRID.STREET_SPACING * 6;
+    const S = 512;
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = S;
+    const ctx = cv.getContext("2d");
+    ctx.clearRect(0, 0, S, S);
+
+    const toPx = (wx, wz) => [((wx + spanX / 2) / spanX) * S, ((wz + spanZ / 2) / spanZ) * S];
+
+    // additive value field
+    const towers = this.brandTowersGroup.children;
+    const top = Math.max(1, ...towers.map((t) => t.userData.amount || 0));
+    ctx.globalCompositeOperation = "lighter";
+    towers.forEach((t) => {
+      const amt = t.userData.amount || 0;
+      const w = Math.pow(Math.max(0.04, amt / top), 0.45);
+      const [px, pz] = toPx(t.position.x, t.position.z);
+      const r = 24 + w * 66;
+      const grad = ctx.createRadialGradient(px, pz, 0, px, pz, r);
+      grad.addColorStop(0, `rgba(255,${Math.round(210 - w * 190)},40,${0.5 + w * 0.45})`);
+      grad.addColorStop(0.45, `rgba(255,${Math.round(160 - w * 120)},30,${0.22 + w * 0.2})`);
+      grad.addColorStop(1, "rgba(40,90,255,0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(px, pz, r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    // a cool floor so unclaimed land still reads as "cold", not empty
+    ctx.globalCompositeOperation = "destination-over";
+    const floor = ctx.createLinearGradient(0, 0, 0, S);
+    floor.addColorStop(0, "rgba(30,80,200,0.20)");
+    floor.addColorStop(1, "rgba(20,60,170,0.20)");
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, 0, S, S);
+    ctx.globalCompositeOperation = "source-over";
+
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+
+    if (this._heatMesh) {
+      this._heatMesh.material.map?.dispose();
+      this._heatMesh.material.map = tex;
+      this._heatMesh.material.needsUpdate = true;
+      return;
+    }
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(spanX, spanZ),
+      new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        opacity: 0.82,
+        depthWrite: false,
+      })
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(0, 42, 0); // floats above the rooftops so it always reads
+    mesh.renderOrder = 6;
+    this._heatMesh = mesh;
+    this.scene.add(mesh);
+  }
+
   // ── Game-mode bridge ────────────────────────────────────────────────
   setGameHook(fn) {
     this.gameHook = fn || null;
   }
 
   enterGameMode() {
+    // The player needs the finished world, not a half-populated one.
+    this.ensureBuilt();
     this.gameMode = true;
     this.isDragging = false;
     this.isRotating = false;
@@ -3145,9 +4119,59 @@ export class ThreeCityEngine {
     this._extraSolids = [];
   }
 
+  /**
+   * Every street-level place a player can be dropped when they enter the city.
+   *
+   * These used to all sit inside the fountain plaza, so "Enter City" always
+   * put you in the same park. The list now spans the whole map — the square,
+   * the plaza, the waterfront and each named district — and getSpawnPoint()
+   * picks at random, so consecutive entries land you somewhere new.
+   */
   getAllSpawnLocations() {
     const p = plazaRect();
+    const ts = timesSquareRect();
+    const tsW = (ts.x1 - ts.x0) * 0.5;
+    const tsD = (ts.z1 - ts.z0) * 0.5;
+    const b = worldBounds();
+
+    // Snapped to the nearest road crossing and nudged onto the sidewalk, so a
+    // district spawn can never drop the player inside a building footprint.
+    const av = avenues();
+    const st = streets();
+    const nearest = (list, key, v) =>
+      list.reduce((best, cur) => (Math.abs(cur[key] - v) < Math.abs(best[key] - v) ? cur : best));
+    const districtSpots = DISTRICT_META.map((d) => {
+      const [dx, dz] = d.center;
+      const a = nearest(av, "x", dx);
+      const t = nearest(st, "z", dz);
+      return {
+        x: a.x + GRID.ROAD_W_AVENUE / 2 + 3,
+        y: 0.1,
+        z: t.z + GRID.ROAD_W_STREET / 2 + 3,
+        yaw: Math.PI,
+        area: d.name,
+      };
+    });
+
     return [
+      // ── TIMES SQUARE — the headline arrival, weighted with 8 of the spots
+      // so the crossroads is where you most often wake up.
+      { x: ts.cx, y: 0.1, z: ts.cz + tsD * 0.72, yaw: 0, area: "Times Square" },
+      { x: ts.cx, y: 0.1, z: ts.cz - tsD * 0.72, yaw: Math.PI, area: "Times Square" },
+      { x: ts.cx + tsW * 0.72, y: 0.1, z: ts.cz, yaw: -Math.PI / 2, area: "Times Square" },
+      { x: ts.cx - tsW * 0.72, y: 0.1, z: ts.cz, yaw: Math.PI / 2, area: "Times Square" },
+      { x: ts.cx - tsW * 0.4, y: 0.1, z: ts.cz + tsD * 0.4, yaw: -Math.PI * 0.75, area: "Times Square" },
+      { x: ts.cx + tsW * 0.4, y: 0.1, z: ts.cz - tsD * 0.4, yaw: Math.PI * 0.25, area: "Times Square" },
+      { x: ts.cx, y: 0.1, z: ts.cz + tsD * 1.25, yaw: 0, area: "Times Square Approach" },
+      { x: ts.cx, y: 0.1, z: ts.cz - tsD * 1.25, yaw: Math.PI, area: "Times Square Approach" },
+
+      // ── Waterfront + greenbelt edges of the island ─────────────────
+      { x: b.halfW + GRID.SHORE_MARGIN * 0.5, y: 0.1, z: 0, yaw: Math.PI / 2, area: "Harbor Promenade" },
+      { x: -b.halfW - GRID.SHORE_MARGIN * 0.4, y: 0.1, z: b.halfD * 0.35, yaw: -Math.PI / 2, area: "Greenridge Shore" },
+
+      // ── One street-level spot in the heart of every named district ──
+      ...districtSpots,
+    ].concat([
       // 1. Central Park South Grand Entrance
       { x: p.cx, y: 0.10, z: p.z1 + 16, yaw: Math.PI },
       // 2. Central Park North Gate Avenue
@@ -3180,7 +4204,7 @@ export class ThreeCityEngine {
       { x: p.cx + 40, y: 0.10, z: p.cz - 115, yaw: -Math.PI / 2 },
       // 16. South Parkview Boulevard
       { x: p.cx - 40, y: 0.10, z: p.cz + 115, yaw: Math.PI / 2 },
-    ];
+    ]);
   }
 
   /**
@@ -3254,6 +4278,10 @@ export class ThreeCityEngine {
   }
 
   destroy() {
+    this._destroyed = true;
+    this._cancelBuildQueue();
+    this._resizeObs?.disconnect();
+    this._resizeObs = null;
     if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
     const dom = this.renderer?.domElement;
     if (dom) {
@@ -3316,6 +4344,13 @@ function scaleUV(geo, su, sv) {
   return geo;
 }
 
+/** Compact money label for in-world signage ($1.2K / $340). */
+function formatMoneyShort(inr) {
+  const usd = (inr || 0) / INR_PER_USD;
+  if (usd >= 1000) return `$${(usd / 1000).toFixed(usd >= 10000 ? 0 : 1)}K`;
+  return `$${Math.round(usd)}`;
+}
+
 function keyOf(lot) {
   return `${Math.round(lot.cx)},${Math.round(lot.cz)}`;
 }
@@ -3328,6 +4363,8 @@ function touchCenter(t) {
 }
 
 const CLAIM_KEY = "tri-claimed-plots";
+const ALLOC_KEY = "tri-allocated-plots";
+
 function loadClaimedPlots() {
   try {
     return JSON.parse(localStorage.getItem(CLAIM_KEY) || "{}") || {};
@@ -3343,12 +4380,41 @@ function saveClaimedPlots(obj) {
   }
 }
 
+function loadAllocatedPlots() {
+  try {
+    return JSON.parse(localStorage.getItem(ALLOC_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+function saveAllocatedPlots(obj) {
+  try {
+    localStorage.setItem(ALLOC_KEY, JSON.stringify(obj));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getPlotFixedPriceUSD(districtIdOrArchetype) {
+  const d = String(districtIdOrArchetype || "").toLowerCase();
+  if (d.includes("northpoint") || d.includes("downtown") || d.includes("crown") || d.includes("central")) return 30;
+  if (d.includes("meridian") || d.includes("westfield") || d.includes("midtown")) return 20;
+  if (d.includes("harborview") || d.includes("dockside") || d.includes("waterfront")) return 15;
+  if (d.includes("greenridge") || d.includes("residential") || d.includes("tech")) return 10;
+  return 5;
+}
+
 // $200 (USD) buys one floor; amounts arrive in INR (~₹83 / $1).
 // Every paid plot is at least a small building; the #1 landmark is guaranteed
 // to lead the skyline it tops.
 export const MIN_BRAND_FLOORS = 4;
 // Buying a finished building costs a premium over building one yourself.
 export const PREBUILT_PREMIUM = 1.6;
+// Fixed resale band for ordinary building stock — pocket-change, deliberately.
+// Times Square has no band because its buildings are never for sale; the
+// square's economy is its billboards (see getPrebuiltAt).
+export const SMALL_PRICE_MIN = 2;
+export const SMALL_PRICE_MAX = 10;
 export const CROWN_MIN_FLOORS = 34;
 
 export const USD_PER_FLOOR = 5;

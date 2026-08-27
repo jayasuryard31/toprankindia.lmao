@@ -131,10 +131,10 @@ async function fetchMetadata(websiteUrl) {
   // 4. Hero / Banner image in index.html body
   const heroImage = $('[class*="hero"] img, [class*="banner"] img, main img, section img').first().attr("src") || "";
 
-  // Resolve best logo / image from index.html
-  const bestImage = indexHtmlLogo || ogImage || appleTouchIcon || heroImage;
-  const logoUrl = resolveUrl(websiteUrl, bestImage) || "";
+  // Resolve best logo / icon from index.html (favicons and logos only, no wide og:image banners)
+  const bestImage = indexHtmlLogo || appleTouchIcon || $('link[rel="icon"]').attr("href") || "";
   const faviconUrl = resolveUrl(websiteUrl, appleTouchIcon || $('link[rel="icon"]').attr("href") || "/favicon.ico") || "";
+  const logoUrl = resolveUrl(websiteUrl, bestImage) || faviconUrl;
 
   return {
     websiteName,

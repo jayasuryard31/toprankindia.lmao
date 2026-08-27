@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ThreeCityEngine } from "./three/ThreeCityEngine";
-import BrandBillboards from "./three/BrandBillboards";
 import DistrictOverlayCards from "./three/DistrictOverlayCards";
 import { useTheme } from "../../context/ThemeContext";
+import { useMapStore } from "./useMapStore";
 import InMapBuildingPopup from "../city/InMapBuildingPopup";
 import PlotBidPopup from "../city/PlotBidPopup";
 import BillboardBookingPopup from "../city/BillboardBookingPopup";
@@ -24,6 +24,9 @@ export default function MapCanvas({
   const [engineReady, setEngineReady] = useState(false);
   const [gameActive, setGameActive] = useState(false);
   const [introPlaying, setIntroPlaying] = useState(false);
+  // Bumped on every 3D↔2D switch to retrigger the shutter-blink overlay.
+  const [blink, setBlink] = useState(0);
+  const viewSwitchedRef = useRef(false);
 
   const [billboards, setBillboards] = useState([]);
   const [districtCards, setDistrictCards] = useState([]);
@@ -35,6 +38,8 @@ export default function MapCanvas({
   const [billboardPos, setBillboardPos] = useState(null);
 
   const { theme } = useTheme();
+  const viewMode = useMapStore((s) => s.viewMode);
+  const showHeatmap = useMapStore((s) => s.showHeatmap);
 
   const topBrand = products?.length
     ? [...products].sort((a, b) => (b.currentAmount || 0) - (a.currentAmount || 0))[0]?.websiteName
@@ -164,6 +169,27 @@ export default function MapCanvas({
     engineRef.current?.setTheme(theme);
   }, [theme]);
 
+  // 2b. Sync 2D/3D view mode + heatmap overlay.
+  // The engine cuts between the two views instantly (no camera tween — see
+  // setViewMode). The cut is hidden behind a shutter blink, and fired at the
+  // blink's peak so the swap is never visible.
+  useEffect(() => {
+    if (!engineReady) return undefined;
+    const first = !viewSwitchedRef.current;
+    viewSwitchedRef.current = true;
+    if (first) {
+      engineRef.current?.setViewMode?.(viewMode);
+      return undefined;
+    }
+    setBlink((n) => n + 1);
+    const id = setTimeout(() => engineRef.current?.setViewMode?.(viewMode), 95);
+    return () => clearTimeout(id);
+  }, [viewMode, engineReady]);
+
+  useEffect(() => {
+    engineRef.current?.setHeatmap?.(showHeatmap);
+  }, [showHeatmap, engineReady]);
+
   // 3. Sync Products / Bids
   useEffect(() => {
     if (engineRef.current) {
@@ -171,6 +197,7 @@ export default function MapCanvas({
         ? products.filter((p) => String(p.categoryId || p.category?.id) === String(activeCategoryId))
         : products;
       engineRef.current.syncProducts(filtered);
+      engineRef.current.refreshHeatmap?.();
       updateProjectedOverlays();
 
       // Opening shot — glide in on the #1 landmark the first time this engine
@@ -208,6 +235,14 @@ export default function MapCanvas({
       <div ref={containerRef} className="absolute inset-0 w-full h-full z-0 touch-none" />
 
       {engineReady && <PerfHUD engine={engineRef.current} />}
+
+      {/* Shutter blink covering the hard 3D↔2D cut */}
+      {blink > 0 && (
+        <div
+          key={blink}
+          className="absolute inset-0 z-[45] pointer-events-none bg-[#F2EFE9] dark:bg-[#14171C] animate-view-blink"
+        />
+      )}
 
       {/* Opening shot — subtle lower-third caption, never blocks the city */}
       {introPlaying && !gameActive && (
@@ -259,18 +294,6 @@ export default function MapCanvas({
         onSelectDistrict={(distId) => engineRef.current?.focusDistrict(distId)}
       />
 
-      <BrandBillboards
-        billboards={billboards}
-        onSelectProduct={(product) => {
-          setSelectedPlot(null);
-          setPlotPos(null);
-          setSelectedTower(product);
-          onSelectProduct?.(product);
-          const activeB = billboards.find((b) => b.id === product.id);
-          if (activeB) setPopupPos({ x: activeB.screenX, y: activeB.screenY });
-        }}
-      />
-
       {selectedTower && popupPos && (
         <InMapBuildingPopup
           building={{
@@ -296,8 +319,7 @@ export default function MapCanvas({
             setPlotPos(null);
           }}
           onAcquire={(product, x, z) => {
-            const key = product?.normalizedUrl || product?.websiteUrl;
-            engineRef.current?.claimPlot(key, x, z);
+            engineRef.current?.claimPlotAndRise(product, x, z);
             onOutbidSuccess?.(product);
           }}
         />

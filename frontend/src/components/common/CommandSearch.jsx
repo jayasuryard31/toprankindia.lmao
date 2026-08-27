@@ -260,7 +260,7 @@ export default function CommandSearch({ isOpen, onClose, onSelect }) {
               <kbd className="font-mono">↵</kbd> Select
             </span>
           </div>
-          <span>TopRankIndia Live Board</span>
+          <span>TopRankPlots Global Metropolis</span>
         </div>
       </div>
     </div>

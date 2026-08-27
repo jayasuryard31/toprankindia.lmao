@@ -90,9 +90,44 @@ export default function InMapBuildingPopup({
         key: import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_placeholder",
         amount: order.amount * 100,
         currency: order.currency || "INR",
-        name: "TopRankIndia City",
+        name: "TopRankPlots Metropolis",
         description: `Boost ${product.websiteName} to ${format(order.amount)}`,
         order_id: order.orderId,
+        prefill: {
+          name: "TopRankPlots Trader",
+          email: "trader@toprankworld.lol",
+          contact: "9999999999",
+        },
+        theme: {
+          color: "#F05A38",
+        },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: "UPI (UPI ID, Google Pay, PhonePe, Paytm)",
+                instruments: [
+                  {
+                    method: "upi",
+                    flows: ["intent", "collect"],
+                  },
+                ],
+              },
+              other: {
+                name: "Cards, NetBanking & Wallets",
+                instruments: [
+                  { method: "card" },
+                  { method: "netbanking" },
+                  { method: "wallet" },
+                ],
+              },
+            },
+            sequence: ["block.upi", "block.other"],
+            preferences: {
+              show_default_blocks: true,
+            },
+          },
+        },
         handler: async (response) => {
           setLoading(true);
           try {
@@ -130,15 +165,43 @@ export default function InMapBuildingPopup({
     }
   };
 
+  const winW = typeof window !== "undefined" ? window.innerWidth : 1000;
+  const winH = typeof window !== "undefined" ? window.innerHeight : 800;
+
+  const rawX = screenPos?.x ?? winW / 2;
+  const rawY = screenPos?.y ?? winH / 2;
+
+  // Navbar height is 56px. Maintain strict safe margin below navbar.
+  const NAVBAR_HEIGHT = 56;
+  const TOP_SAFE_MARGIN = 16;
+  const MIN_TOP = NAVBAR_HEIGHT + TOP_SAFE_MARGIN; // 72px
+  const BOTTOM_SAFE_MARGIN = 20;
+
+  const popupWidth = 330;
+  const halfW = popupWidth / 2;
+  const posX = Math.max(halfW + 12, Math.min(winW - halfW - 12, rawX));
+
+  const estimatedH = 360;
+  const placeAbove = (rawY - estimatedH - 16) >= MIN_TOP;
+
+  let posY;
+  if (placeAbove) {
+    posY = Math.max(MIN_TOP, rawY - 14 - estimatedH);
+  } else {
+    posY = Math.max(MIN_TOP, Math.min(winH - estimatedH - BOTTOM_SAFE_MARGIN, rawY + 16));
+  }
+
+  const arrowLeft = Math.max(24, Math.min(popupWidth - 24, rawX - posX + halfW));
+
   return (
     <>
       <div
         style={{
-          left: `${screenPos.x}px`,
-          top: `${screenPos.y - 12}px`,
+          left: `${posX}px`,
+          top: `${posY}px`,
         }}
         onClick={(e) => e.stopPropagation()}
-        className="absolute -translate-x-1/2 -translate-y-full z-40 w-76 sm:w-84 glass-panel p-4 rounded-3xl shadow-feather-lg border border-border text-xs animate-in fade-in zoom-in-95 duration-200 pointer-events-auto"
+        className="absolute -translate-x-1/2 z-40 w-76 sm:w-84 max-w-[calc(100vw-24px)] max-h-[calc(100vh-88px)] overflow-y-auto glass-panel p-4 rounded-3xl shadow-feather-lg border border-border text-xs animate-in fade-in zoom-in-95 duration-200 pointer-events-auto"
       >
         {/* Header Row */}
         <div className="flex items-center justify-between mb-2">
@@ -239,10 +302,18 @@ export default function InMapBuildingPopup({
           </Link>
         </div>
 
-        {/* Downward Anchor Arrow pointing to building rooftop */}
-        <div
-          className="absolute left-1/2 -bottom-2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white/90 dark:border-t-[#1E1B18]/90"
-        />
+        {/* Anchor Arrow pointing to building */}
+        {placeAbove ? (
+          <div
+            style={{ left: `${arrowLeft}px` }}
+            className="absolute -bottom-2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white/90 dark:border-t-[#1E1B18]/90"
+          />
+        ) : (
+          <div
+            style={{ left: `${arrowLeft}px` }}
+            className="absolute -top-2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-white/90 dark:border-b-[#1E1B18]/90"
+          />
+        )}
       </div>
 
       {/* Outbid Checkout Modal */}

@@ -154,7 +154,7 @@ function signTexture(color, name) {
   ctx.fillText(name, 24, 130);
   ctx.font = "22px Inter, Arial, sans-serif";
   ctx.fillStyle = "#555";
-  ctx.fillText("TopRankIndia · claim to build", 24, 176);
+  ctx.fillText("TopRankPlots · claim to build", 24, 176);
   ctx.fillText("Bigger bid → taller landmark", 24, 212);
   ctx.strokeStyle = color;
   ctx.lineWidth = 6;

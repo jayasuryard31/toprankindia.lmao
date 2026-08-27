@@ -29,7 +29,11 @@ export function createPostFX(renderer, scene, camera) {
   const bloomComposer = new EffectComposer(renderer);
   bloomComposer.renderToScreen = false;
   bloomComposer.addPass(new RenderPass(scene, camera));
-  const bloomPass = new UnrealBloomPass(size.clone(), 0.55, 0.6, 0.35);
+  // strength / radius / threshold.
+  // Tuned DOWN hard: at 0.55/0.6 the Times Square sign wall blew into a single
+  // white blob you could not read a word through. Bloom's job here is a halo
+  // around lamps and sign edges, not a light source of its own.
+  const bloomPass = new UnrealBloomPass(size.clone(), 0.28, 0.45, 0.62);
   bloomComposer.addPass(bloomPass);
 
   const mixPass = new ShaderPass(
@@ -41,7 +45,7 @@ export function createPostFX(renderer, scene, camera) {
       vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
       fragmentShader: `
         uniform sampler2D baseTexture; uniform sampler2D bloomTexture; varying vec2 vUv;
-        void main(){ gl_FragColor = texture2D(baseTexture, vUv) + vec4(1.0) * texture2D(bloomTexture, vUv); }`,
+        void main(){ gl_FragColor = texture2D(baseTexture, vUv) + 0.8 * texture2D(bloomTexture, vUv); }`,
       defines: {},
     }),
     "baseTexture"

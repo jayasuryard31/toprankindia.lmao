@@ -15,6 +15,7 @@ export const MAT = {
   hedge: new THREE.MeshStandardMaterial({ color: 0x3c6b34, roughness: 1 }),
   pole: new THREE.MeshStandardMaterial({ color: 0x2c313a, roughness: 0.6, metalness: 0.5 }),
   lamp: new THREE.MeshStandardMaterial({ color: 0xffe9b0, emissive: 0xffdd92, emissiveIntensity: 1.4 }),
+  lampGlobe: new THREE.MeshStandardMaterial({ color: 0xfff0c4, emissive: 0xffea9f, emissiveIntensity: 1.6 }),
   glass: new THREE.MeshStandardMaterial({ color: 0x9fd4e8, roughness: 0.15, metalness: 0.2, transparent: true, opacity: 0.5 }),
   carGlass: new THREE.MeshStandardMaterial({
     color: 0x121a24,
@@ -26,6 +27,16 @@ export const MAT = {
   }),
   chrome: new THREE.MeshStandardMaterial({ color: 0xced6dd, roughness: 0.3, metalness: 0.7 }),
 };
+
+/**
+ * Street / park lamps share one material each, so the city clock can dim every
+ * light in the world with two assignments. `0` reads as "off" in daylight.
+ */
+export function setLampIntensity(v) {
+  const k = Math.max(0, v);
+  MAT.lamp.emissiveIntensity = k * 1.4;
+  MAT.lampGlobe.emissiveIntensity = k * 1.6;
+}
 
 const canopyGreens = [0x4b8b3b, 0x3f7d33, 0x5a9a45, 0x36702f, 0x6aa84f];
 

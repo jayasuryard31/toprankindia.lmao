@@ -1,109 +1,48 @@
-import { useEffect, useRef } from "react";
-import * as maplibreNS from "maplibre-gl";
+import { useEffect, useState } from "react";
+import CityMiniMap from "./CityMiniMap";
 
-const maplibregl = maplibreNS.default ?? maplibreNS;
-import { baseStyle, addCityLayers, applyTheme } from "./cityStyle";
-import { useCityLayout } from "../../hooks/useCityLayout";
-import { useMapStore } from "./useMapStore";
-import { useTheme } from "../../context/ThemeContext";
-import { getMapInstance } from "./mapInstance";
-
-const viewportPolygon = (b) => ({
-  type: "FeatureCollection",
-  features: [{
-    type: "Feature",
-    properties: {},
-    geometry: {
-      type: "Polygon",
-      coordinates: [[
-        [b.getWest(), b.getSouth()],
-        [b.getEast(), b.getSouth()],
-        [b.getEast(), b.getNorth()],
-        [b.getWest(), b.getNorth()],
-        [b.getWest(), b.getSouth()],
-      ]],
-    },
-  }],
-});
-
+/**
+ * Overview panel on the map view. Renders from the SAME cityGrid + live engine
+ * the 3D world uses, so it is always in sync (the old MapLibre version drew a
+ * completely separate fake lng/lat city and could never match).
+ */
 export default function MiniMap() {
-  const ref = useRef(null);
-  const mapRef = useRef(null);
-  const readyRef = useRef(false);
-  const { data: layout } = useCityLayout();
-  const { theme } = useTheme();
-  const camera = useMapStore((s) => s.camera);
-  const themeRef = useRef(theme);
-
+  // The engine is created by MapCanvas, which may mount after this panel —
+  // poll briefly so the overview never gets stuck on a null reference.
+  const [engine, setEngine] = useState(() =>
+    typeof window !== "undefined" ? window.__threeCityEngine : null
+  );
   useEffect(() => {
-    themeRef.current = theme;
-  });
-
-  useEffect(() => {
-    const map = new maplibregl.Map({
-      container: ref.current,
-      style: baseStyle(themeRef.current),
-      center: [72.915, 19.09],
-      zoom: 10.4,
-      interactive: false,
-      attributionControl: false,
-    });
-    mapRef.current = map;
-    const draw = () => {
-      addCityLayers(map, layout, themeRef.current);
-      map.addSource("viewport", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-      map.addLayer({ id: "viewport-fill", type: "fill", source: "viewport", paint: { "fill-color": "#F05A38", "fill-opacity": 0.16 } });
-      map.addLayer({ id: "viewport-line", type: "line", source: "viewport", paint: { "line-color": "#F05A38", "line-width": 2 } });
-      map.resize();
-      readyRef.current = true;
-      const kick = () => {
-        if (!mapRef.current) return;
-        map.resize();
-        try { map.redraw(); } catch { /* noop */ }
-      };
-      requestAnimationFrame(kick);
-      [180, 500, 1200].forEach((ms) => setTimeout(kick, ms));
-    };
-    let done = false;
-    const run = () => {
-      if (done) return;
-      done = true;
-      clearInterval(poll);
-      draw();
-    };
-    map.on("load", run);
-    const poll = setInterval(() => {
-      if (done) return;
-      try { map.redraw(); } catch { /* not ready */ }
-      if (map.style && map.isStyleLoaded()) run();
-    }, 150);
-    return () => {
-      clearInterval(poll);
-      readyRef.current = false;
-      try { map.remove(); } catch { /* noop */ }
-      mapRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const mini = mapRef.current;
-    if (!mini || !readyRef.current) return;
-    applyTheme(mini, theme);
-    try { mini.redraw(); } catch { /* noop */ }
-  }, [theme]);
-
-  useEffect(() => {
-    const mini = mapRef.current;
-    const main = getMapInstance();
-    if (!mini || !main || !mini.getSource("viewport")) return;
-    mini.getSource("viewport").setData(viewportPolygon(main.getBounds()));
-  }, [camera]);
+    if (engine) return undefined;
+    const id = setInterval(() => {
+      if (window.__threeCityEngine) {
+        setEngine(window.__threeCityEngine);
+        clearInterval(id);
+      }
+    }, 300);
+    return () => clearInterval(id);
+  }, [engine]);
 
   return (
-    <div className="w-full glass-panel rounded-2xl shadow-feather-lg border border-border/80 p-2">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-muted px-1 pb-1.5">Overview</div>
-      <div ref={ref} className="w-full h-32 rounded-xl overflow-hidden" />
+    <div className="glass-panel rounded-2xl border border-border/80 shadow-feather-lg overflow-hidden">
+      <div className="flex items-center justify-between px-3 pt-2.5 pb-1.5">
+        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-muted">Overview</span>
+        <span className="text-[9px] font-mono text-muted/70">Velora Harbor</span>
+      </div>
+      <div className="px-2.5 pb-2.5">
+        <CityMiniMap engine={engine} size={268} showPlots showViewport />
+      </div>
+      <div className="px-3 pb-2.5 flex items-center gap-3 text-[9px] text-muted font-mono">
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full bg-[#ffd54a]" /> #1
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-sm bg-[rgba(226,232,240,0.8)]" /> Built
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-sm border border-[#7dffb0]" /> Free plot
+        </span>
+      </div>
     </div>
   );
 }

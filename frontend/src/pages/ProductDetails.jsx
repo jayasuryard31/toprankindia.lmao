@@ -103,9 +103,44 @@ export default function ProductDetails() {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_placeholder",
         amount: order.amount * 100,
         currency: order.currency || "INR",
-        name: "TopRankIndia",
+        name: "TopRankPlots",
         description: `Rank ${product.websiteName} for ${format(order.amount)}`,
         order_id: order.orderId,
+        prefill: {
+          name: "TopRankPlots Trader",
+          email: "trader@toprankworld.lol",
+          contact: "9999999999",
+        },
+        theme: {
+          color: "#F05A38",
+        },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: "UPI (UPI ID, Google Pay, PhonePe, Paytm)",
+                instruments: [
+                  {
+                    method: "upi",
+                    flows: ["intent", "collect"],
+                  },
+                ],
+              },
+              other: {
+                name: "Cards, NetBanking & Wallets",
+                instruments: [
+                  { method: "card" },
+                  { method: "netbanking" },
+                  { method: "wallet" },
+                ],
+              },
+            },
+            sequence: ["block.upi", "block.other"],
+            preferences: {
+              show_default_blocks: true,
+            },
+          },
+        },
         handler: async (response) => {
           setOutbidLoading(true);
           setLoadingStep("Verifying payment and updating rank...");
@@ -309,7 +344,7 @@ export default function ProductDetails() {
 
               {/* Description */}
               <p className="text-xs sm:text-sm text-muted mt-3 leading-relaxed">
-                {product.description || "Play ambient sounds, relax, and discover what others are building on TopRankIndia."}
+                {product.description || "Explore products, relax, and discover what world-class builders are erecting on TopRankPlots."}
               </p>
             </div>
           </div>
@@ -422,7 +457,7 @@ export default function ProductDetails() {
           </div>
 
           <p className="text-xs text-muted leading-relaxed mb-5">
-            {product.description || `${product.websiteName} is listed on TopRankIndia to claim discoverability and organic traffic from builders and founders.`}
+            {product.description || `${product.websiteName} is listed on TopRankPlots to claim permanent 3D visibility and discoverability from founders and users worldwide.`}
           </p>
 
           {/* Feature Tags */}

@@ -15,16 +15,16 @@ export default function Footer() {
             <Link to="/" className="flex items-center gap-2.5 group">
               <img
                 src="/toprankindiaLOGO.png"
-                alt="TopRankIndia"
+                alt="TopRankPlots"
                 className="h-7 w-auto object-contain"
               />
               <span className="font-bold text-base tracking-tight text-charcoal dark:text-cream group-hover:text-coral transition-colors flex items-center">
-                TopRank<span className="text-coral">India</span>
+                TopRank<span className="text-coral">Plots</span>
               </span>
             </Link>
             <span className="hidden sm:inline text-muted/40">•</span>
             <p className="text-xs text-muted">
-              The living, pay-to-rank product leaderboard for Indian startups.
+              The 3D global virtual metropolis &amp; living product economy.
             </p>
           </div>
 
@@ -32,20 +32,20 @@ export default function Footer() {
           <div className="flex items-center gap-6 text-xs font-semibold text-muted">
             <Link to="/" className="hover:text-coral transition-colors">Leaderboard</Link>
             <Link to="/categories" className="hover:text-coral transition-colors">Categories</Link>
-            <Link to="/about" className="hover:text-coral transition-colors">About & Rules</Link>
+            <Link to="/about" className="hover:text-coral transition-colors">About & Metropolis</Link>
           </div>
         </div>
 
         {/* Bottom copyright & legal */}
         <div className="mt-8 pt-6 border-t border-border/40 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-muted-light">
           <div className="flex items-center gap-4">
-            <span>Rules</span>
+            <span>Metropolis Architecture</span>
             <span>·</span>
-            <span>Terms</span>
+            <span>Terms &amp; Plots</span>
             <span>·</span>
-            <span>Privacy</span>
+            <span>Global Privacy</span>
           </div>
-          <p>© 2026 TopRankIndia. All rights reserved.</p>
+          <p>© 2026 TopRankPlots. All rights reserved.</p>
         </div>
       </div>
     </footer>

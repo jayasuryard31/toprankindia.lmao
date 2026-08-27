@@ -25,7 +25,7 @@ const queryClient = new QueryClient({
 
 function RouteFallback() {
   return (
-    <div className="w-full h-[calc(100vh-68px)] min-h-[560px] flex items-center justify-center bg-[#F1EEE6] dark:bg-[#14171C]">
+    <div className="w-full h-[calc(100vh-56px)] min-h-[560px] flex items-center justify-center bg-[#F1EEE6] dark:bg-[#14171C]">
       <div className="h-6 w-6 rounded-full border-2 border-coral/30 border-t-coral animate-spin" />
     </div>
   );

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { forEachBlock, plazaRect } from "../../../components/map/three/cityGrid.js";
+import { forEachBlock, plazaRect, timesSquareRect } from "../../../components/map/three/cityGrid.js";
 import { createNpcModel } from "../../characters/npc/NpcModel.js";
 import { PlayerAnimator } from "../../characters/player/PlayerAnimator.js";
 
@@ -14,6 +14,9 @@ import { PlayerAnimator } from "../../characters/player/PlayerAnimator.js";
  */
 
 export class NpcSystem {
+  /** Pedestrians farther than this from the camera are not drawn at all. */
+  static CULL_DIST = 420;
+
   constructor(engine) {
     this.engine = engine;
     this.agents = [];
@@ -96,15 +99,79 @@ export class NpcSystem {
         { x: cx - sin * 66, z: cz + cos * 66 },
       ]);
     }
+
+    // 4. TIMES SQUARE — kept in its own list because the square gets its own
+    // (much larger) share of the crowd. The park had a countable handful of
+    // walkers; the crossroads is meant to feel shoulder-to-shoulder.
+    this.tsRoutes = [];
+    const ts = timesSquareRect();
+    const tx = ts.cx;
+    const tz = ts.cz;
+    const tw = (ts.x1 - ts.x0) * 0.5;
+    const td = (ts.z1 - ts.z0) * 0.5;
+
+    // Concentric pedestrian loops around the bow-tie plaza, both directions.
+    [0.9, 0.72, 0.54, 0.36].forEach((k, ri) => {
+      const cwPts = [];
+      const ccwPts = [];
+      const N = 20;
+      for (let i = 0; i < N; i++) {
+        const a = (i / N) * Math.PI * 2;
+        cwPts.push({ x: tx + Math.cos(a) * tw * k, z: tz + Math.sin(a) * td * k });
+        const b = ((N - i) / N) * Math.PI * 2;
+        ccwPts.push({ x: tx + Math.cos(b) * tw * k, z: tz + Math.sin(b) * td * k });
+      }
+      this.tsRoutes.push(cwPts);
+      if (ri % 2 === 0) this.tsRoutes.push(ccwPts);
+    });
+
+    // Crossing shuttles: people cutting straight across the square, plus the
+    // four approach sidewalks feeding into it.
+    for (let i = 0; i < 6; i++) {
+      const off = (i / 5 - 0.5) * td * 1.3;
+      this.tsRoutes.push([
+        { x: tx - tw * 1.5, z: tz + off },
+        { x: tx + tw * 1.5, z: tz + off },
+      ]);
+      const offX = (i / 5 - 0.5) * tw * 1.3;
+      this.tsRoutes.push([
+        { x: tx + offX, z: tz - td * 1.5 },
+        { x: tx + offX, z: tz + td * 1.5 },
+      ]);
+    }
+    // Sidewalk perimeter just outside the bollard ring.
+    this.tsRoutes.push([
+      { x: tx - tw * 1.12, z: tz - td * 1.12 },
+      { x: tx + tw * 1.12, z: tz - td * 1.12 },
+      { x: tx + tw * 1.12, z: tz + td * 1.12 },
+      { x: tx - tw * 1.12, z: tz + td * 1.12 },
+    ]);
+    this.tsRoutes.push([
+      { x: tx - tw * 1.12, z: tz + td * 1.12 },
+      { x: tx + tw * 1.12, z: tz + td * 1.12 },
+      { x: tx + tw * 1.12, z: tz - td * 1.12 },
+      { x: tx - tw * 1.12, z: tz - td * 1.12 },
+    ]);
   }
 
   _spawnNpcs() {
-    // Spawn ~55 uniquely styled procedural NPCs across the routes
-    const count = Math.min(60, this.routes.length);
+    // A city this size looked deserted with 60 walkers. The general grid keeps
+    // ~220 walkers; Times Square gets 180 of its own on top, so the square is
+    // visibly the crowded part of town rather than one more quiet block.
+    const cityCount = Math.min(150, this.routes.length * 3);
+    // The square carries more walkers than the whole rest of the grid. It is
+    // backed by a static instanced crowd too (see timesSquare.js buildCrowd) —
+    // these are the ones that move through it.
+    const tsCount = 230;
+    const count = cityCount + tsCount;
 
     for (let i = 0; i < count; i++) {
-      const routeIdx = i % this.routes.length;
-      const route = this.routes[routeIdx];
+      const inTs = i >= cityCount;
+      const pool = inTs ? this.tsRoutes : this.routes;
+      const routeIdx = inTs
+        ? (i * 5 + Math.floor(i / pool.length)) % pool.length
+        : (i * 7 + Math.floor(i / pool.length)) % pool.length;
+      const route = pool[routeIdx];
       const startWpIdx = Math.floor(Math.random() * route.length);
       const nextWpIdx = (startWpIdx + 1) % route.length;
 
@@ -112,8 +179,11 @@ export class NpcSystem {
       const p1 = route[nextWpIdx];
       const lerpT = Math.random();
 
-      const x = p0.x + (p1.x - p0.x) * lerpT + (Math.random() - 0.5) * 1.0;
-      const z = p0.z + (p1.z - p0.z) * lerpT + (Math.random() - 0.5) * 1.0;
+      // Wider lateral jitter on the square so the crowd fills the plaza
+      // instead of tracing four visible conga lines.
+      const jitter = inTs ? 4.5 : 1.0;
+      const x = p0.x + (p1.x - p0.x) * lerpT + (Math.random() - 0.5) * jitter;
+      const z = p0.z + (p1.z - p0.z) * lerpT + (Math.random() - 0.5) * jitter;
       const dx = p1.x - p0.x;
       const dz = p1.z - p0.z;
       const yaw = Math.atan2(dx, dz);
@@ -164,7 +234,13 @@ export class NpcSystem {
         distToCam = Math.hypot(camPos.x - a.x, camPos.z - a.z);
       }
 
-      // If extremely far, simple position advance without bone transform calculation
+      // Two-stage LOD. Beyond CULL_DIST a pedestrian is well under a pixel, so
+      // the whole body is hidden — that is what pays for the much larger Times
+      // Square crowd. Between the two thresholds the model still draws but the
+      // per-bone walk cycle is skipped.
+      const visible = distToCam < NpcSystem.CULL_DIST;
+      if (a.model.group.visible !== visible) a.model.group.visible = visible;
+      if (!visible) continue;
       const isClose = distToCam < 160;
 
       // Occasional pause/idle to admire the city, fountain, or check phone

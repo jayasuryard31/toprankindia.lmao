@@ -11,9 +11,19 @@ export function setAnisotropy(v) {
   anisoRef.value = Math.max(1, v || 1);
 }
 
-const themeRef = { dark: false };
+const themeRef = { dark: false, glow: 0.04 };
 export function setTowerTheme(isDark) {
   themeRef.dark = !!isDark;
+  themeRef.glow = themeRef.dark ? 0.32 : 0.04;
+}
+
+/**
+ * How hot the lit-window layer burns on brand towers. Driven by the city clock
+ * (see timeOfDay.js) so windows warm up through the evening instead of
+ * snapping on with the theme.
+ */
+export function setTowerWindowGlow(v) {
+  themeRef.glow = Math.max(0, v);
 }
 
 // ── Shared facade textures ─────────────────────────────────────────────
@@ -112,7 +122,7 @@ function facadeMaterial(palIndex, volW, volH) {
     map: color,
     emissiveMap: emissive,
     emissive: new THREE.Color(0xffffff),
-    emissiveIntensity: themeRef.dark ? 0.32 : 0.04,
+    emissiveIntensity: themeRef.glow,
     metalness: p.metalness,
     roughness: p.roughness,
     envMapIntensity: 1.15,
@@ -137,21 +147,33 @@ const crownTrimMat = new THREE.MeshStandardMaterial({
  * Returns a THREE.Group whose origin is the ground centre of the lot.
  * Meshes tagged .userData.bloom = true are picked up by selective bloom.
  */
-export function makeTower({ w, d, h, tier = "standard", accentHex = 0xffffff, seed = 1 }) {
+export function makeTower({ w, d, h, tier = "standard", accentHex = 0xffffff, seed = 1, isBrandTower = false }) {
   const g = new THREE.Group();
   const rnd = mulberry(seed);
   const palIndex = tier === "crown" ? 0 : Math.floor(rnd() * 4);
+  const isCrown = tier === "crown";
 
-  // massing: stacked setback volumes — only tall buildings get setbacks.
-  const tiers = h > 150 ? 3 : h > 80 ? 2 : 1;
+  // Classic New York Art Deco stepped massing for the #1 Landmark Skyscraper
+  // Multiple setback volumes (Podium, Mid-Shaft, Upper Setback, Crown Spire Tier)
+  const tiers = isCrown ? (h > 50 ? 4 : 3) : (h > 150 ? 3 : h > 80 ? 2 : 1);
   let y = 0;
   let curW = w;
   let curD = d;
-  const shrink = 0.8;
+
+  const crownTierShares = tiers === 4 ? [0.24, 0.42, 0.22, 0.12] : [0.30, 0.45, 0.25];
+  const crownTierWidths = tiers === 4 ? [1.08, 0.88, 0.68, 0.50] : [1.06, 0.84, 0.62];
 
   for (let t = 0; t < tiers; t++) {
-    const share = t === 0 ? 0.5 : (0.5 / (tiers - 1 || 1)) * (1 - t * 0.12);
-    const vh = Math.max(3, h * (tiers === 1 ? 1 : share));
+    let vh;
+    if (isCrown) {
+      vh = Math.max(3.5, h * (crownTierShares[t] || 0.33));
+      curW = w * (crownTierWidths[t] || 0.8);
+      curD = d * (crownTierWidths[t] || 0.8);
+    } else {
+      const share = t === 0 ? 0.5 : (0.5 / (tiers - 1 || 1)) * (1 - t * 0.12);
+      vh = Math.max(3, h * (tiers === 1 ? 1 : share));
+    }
+
     const geo = new THREE.BoxGeometry(curW, vh, curD);
     const mat = facadeMaterial(palIndex, Math.max(curW, curD), vh);
     const m = new THREE.Mesh(geo, mat);
@@ -160,8 +182,7 @@ export function makeTower({ w, d, h, tier = "standard", accentHex = 0xffffff, se
     m.receiveShadow = true;
     g.add(m);
 
-    // subtle accent-coloured outline — this is the only part that blooms,
-    // so brand towers read as "glowing at the edges" not lit up like a lamp.
+    // Subtle accent outline
     const edges = new THREE.LineSegments(
       new THREE.EdgesGeometry(geo),
       new THREE.LineBasicMaterial({ color: accentHex, transparent: true, opacity: 0.9 })
@@ -170,124 +191,166 @@ export function makeTower({ w, d, h, tier = "standard", accentHex = 0xffffff, se
     edges.userData.bloom = true;
     g.add(edges);
 
-    // parapet ledge — a slim shadow line between volumes, not a black slab
+    // Parapet ledge / Art Deco stepped cornice
+    const ledgeH = isCrown ? 1.0 : 0.8;
     const ledge = new THREE.Mesh(
-      new THREE.BoxGeometry(curW + 1.1, 0.8, curD + 1.1),
+      new THREE.BoxGeometry(curW + 1.2, ledgeH, curD + 1.2),
       tier === "crown" ? crownTrimMat : trimMat
     );
     ledge.position.y = y + vh;
     ledge.castShadow = true;
     g.add(ledge);
 
+    // Art Deco vertical corner pilasters / fluting on New York tower
+    if (isCrown) {
+      const pilasterMat = new THREE.MeshStandardMaterial({
+        color: 0x333b47,
+        roughness: 0.45,
+        metalness: 0.6,
+      });
+      const pw = 0.5;
+      const cornerOffsets = [
+        { x: curW / 2, z: curD / 2 },
+        { x: -curW / 2, z: curD / 2 },
+        { x: curW / 2, z: -curD / 2 },
+        { x: -curW / 2, z: -curD / 2 },
+      ];
+      cornerOffsets.forEach((pos) => {
+        const col = new THREE.Mesh(new THREE.BoxGeometry(pw, vh, pw), pilasterMat);
+        col.position.set(pos.x, y + vh / 2, pos.z);
+        g.add(col);
+      });
+    }
+
     y += vh;
-    curW *= shrink;
-    curD *= shrink;
-  }
-
-  // rooftop clutter (only on buildings tall enough to have a real roof)
-  if (h > 14) {
-    const roofBox = new THREE.Mesh(
-      new THREE.BoxGeometry(curW * 0.5, 3 + rnd() * 5, curD * 0.5),
-      roofMat
-    );
-    roofBox.position.y = y + 2;
-    roofBox.castShadow = true;
-    g.add(roofBox);
-  }
-
-  // antenna / spire + beacon — scaled to the building so a short tower
-  // never gets a giant mast.
-  const wantMast = (tier === "crown" || tier === "top3") ? h > 26 : h > 60 && rnd() > 0.6;
-  if (wantMast) {
-    const mastH = THREE.MathUtils.clamp(h * 0.35, 8, tier === "crown" ? 44 : 28);
-    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 1.4, mastH, 10), trimMat);
-    mast.position.y = y + mastH / 2;
-    g.add(mast);
-    if (tier === "crown" || tier === "top3") {
-      const beacon = new THREE.Mesh(
-        new THREE.SphereGeometry(tier === "crown" ? 3 : 2, 14, 14),
-        new THREE.MeshStandardMaterial({ color: accentHex, emissive: accentHex, emissiveIntensity: 2.4 })
-      );
-      beacon.position.y = y + mastH;
-      beacon.userData.bloom = true;
-      g.add(beacon);
+    if (!isCrown) {
+      curW *= 0.8;
+      curD *= 0.8;
     }
   }
 
-  // ── #1 CROWN TREATMENT — the city's centre of attraction ────────────
-  if (tier === "crown") {
-    const gold = 0xffd54a;
-    const spin = [];
+  // Save top tier dimensions
+  g.userData.topW = curW;
+  g.userData.topD = curD;
 
-    // slim gold crown cap sitting on the roof line
-    const capW = curW * 1.28;
-    const band = new THREE.Mesh(
-      new THREE.BoxGeometry(capW, 1.1, curD * 1.28),
-      new THREE.MeshStandardMaterial({
-        color: gold,
-        emissive: gold,
-        emissiveIntensity: 0.75,
-        metalness: 0.9,
-        roughness: 0.18,
-      })
-    );
-    band.position.y = y + 0.55;
-    band.userData.bloom = true;
-    g.add(band);
-
-    // twin halo rings that slowly counter-rotate above the roof
-    [
-      { r: Math.max(curW, 8) * 0.85, y: y + 9, tilt: 0, dir: 1 },
-      { r: Math.max(curW, 8) * 1.15, y: y + 15, tilt: 0.22, dir: -1 },
-    ].forEach((cfg) => {
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(cfg.r, 0.5, 8, 48),
-        new THREE.MeshStandardMaterial({ color: gold, emissive: gold, emissiveIntensity: 2.6 })
+  // rooftop clutter & masts (only on generic filler buildings, brand buildings get clean logo roofs)
+  if (!isBrandTower) {
+    if (h > 14) {
+      const roofBox = new THREE.Mesh(
+        new THREE.BoxGeometry(curW * 0.5, 3 + rnd() * 5, curD * 0.5),
+        roofMat
       );
-      ring.rotation.x = Math.PI / 2 + cfg.tilt;
-      ring.position.y = cfg.y;
-      ring.userData.bloom = true;
-      ring.userData.spinDir = cfg.dir;
-      spin.push(ring);
-      g.add(ring);
+      roofBox.position.y = y + 2;
+      roofBox.castShadow = true;
+      g.add(roofBox);
+    }
+
+    const wantMast = (tier === "crown" || tier === "top3") ? h > 26 : h > 60 && rnd() > 0.6;
+    if (wantMast) {
+      const mastH = THREE.MathUtils.clamp(h * 0.35, 8, tier === "crown" ? 44 : 28);
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 1.4, mastH, 10), trimMat);
+      mast.position.y = y + mastH / 2;
+      g.add(mast);
+    }
+  }
+
+  // ── #1 CROWN TREATMENT — grand realistic architectural golden crown ────────
+  if (tier === "crown") {
+    const crownGroup = new THREE.Group();
+    crownGroup.name = "rank1-golden-crown";
+
+    // Realistic PBR metallic gold material with natural reflections and zero emissive glare
+    const goldMat = new THREE.MeshStandardMaterial({
+      color: 0xd4af37, // warm classic metallic gold
+      metalness: 0.90,
+      roughness: 0.24,
     });
 
-    // vertical beacon shaft rising out of the roof
-    const beamH = Math.max(120, h * 0.7);
-    const beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.6, 5.5, beamH, 20, 1, true),
-      new THREE.MeshBasicMaterial({
-        color: gold,
-        transparent: true,
-        opacity: 0.16,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-      })
-    );
-    beam.position.y = y + beamH / 2;
-    beam.userData.bloom = true;
-    g.add(beam);
+    // Sized much bigger, spanning across and over the roof profile of the top tier
+    const crownRadius = Math.max(curW * 0.65, 4.8);
+    const crownH = Math.min(curW * 0.72, 6.4);
 
-    // ground halo so the plot itself reads as "the #1 spot"
-    const pad = new THREE.Mesh(
-      new THREE.RingGeometry(w * 0.82, w * 0.98, 48),
-      new THREE.MeshBasicMaterial({
-        color: gold,
-        transparent: true,
-        opacity: 0.55,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      })
+    // 1. Lower Grand Circlet Band (stepped Art Deco base)
+    const baseBand = new THREE.Mesh(
+      new THREE.CylinderGeometry(crownRadius * 0.98, crownRadius * 0.92, crownH * 0.24, 32, 1, true),
+      goldMat
     );
-    pad.rotation.x = -Math.PI / 2;
-    pad.position.y = 0.35;
-    pad.userData.bloom = true;
-    spin.push(Object.assign(pad, { userData: { ...pad.userData, spinDir: 0.35, flat: true } }));
-    g.add(pad);
+    baseBand.position.y = crownH * 0.12;
+    baseBand.castShadow = true;
+    crownGroup.add(baseBand);
 
-    g.userData.spinners = spin;
-    g.userData.beam = beam;
+    // 2. Base & Upper Gold Torus Rings
+    const lowerRim = new THREE.Mesh(
+      new THREE.TorusGeometry(crownRadius * 0.94, 0.18, 8, 36),
+      goldMat
+    );
+    lowerRim.rotation.x = Math.PI / 2;
+    lowerRim.position.y = 0.05;
+    crownGroup.add(lowerRim);
+
+    const midRim = new THREE.Mesh(
+      new THREE.TorusGeometry(crownRadius * 0.98, 0.20, 8, 36),
+      goldMat
+    );
+    midRim.rotation.x = Math.PI / 2;
+    midRim.position.y = crownH * 0.26;
+    crownGroup.add(midRim);
+
+    // 3. 8 Majestic Sculpted Art Deco Crown Peaks spanning over the roof
+    const numPeaks = 8;
+    for (let i = 0; i < numPeaks; i++) {
+      const angle = (i / numPeaks) * Math.PI * 2;
+      const px = Math.cos(angle) * (crownRadius * 0.96);
+      const pz = Math.sin(angle) * (crownRadius * 0.96);
+
+      // Main triangular crown spire
+      const peak = new THREE.Mesh(
+        new THREE.ConeGeometry(0.52, crownH * 0.74, 4),
+        goldMat
+      );
+      peak.position.set(px, crownH * 0.26 + (crownH * 0.74) / 2, pz);
+      peak.rotation.y = angle + Math.PI / 4;
+      peak.castShadow = true;
+      crownGroup.add(peak);
+
+      // Royal Gold Finial Sphere
+      const finial = new THREE.Mesh(
+        new THREE.SphereGeometry(0.36, 12, 12),
+        goldMat
+      );
+      finial.position.set(px, crownH + 0.18, pz);
+      crownGroup.add(finial);
+
+      // Inner connecting gold arch strut
+      const strut = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.12, crownRadius * 0.85, 8),
+        goldMat
+      );
+      strut.position.set(px * 0.5, crownH * 0.65, pz * 0.5);
+      strut.rotation.z = Math.PI / 3.2;
+      strut.rotation.y = angle;
+      crownGroup.add(strut);
+    }
+
+    // 4. Central Art Deco Crown Finial / Crest
+    const centerApex = new THREE.Mesh(
+      new THREE.ConeGeometry(0.45, crownH * 0.45, 6),
+      goldMat
+    );
+    centerApex.position.set(0, crownH * 0.75, 0);
+    crownGroup.add(centerApex);
+
+    const centerBall = new THREE.Mesh(
+      new THREE.SphereGeometry(0.42, 14, 14),
+      goldMat
+    );
+    centerBall.position.set(0, crownH + 0.25, 0);
+    crownGroup.add(centerBall);
+
+    // Position crown with a minimum 0.45 gap above the roof line
+    const roofGap = 0.45;
+    crownGroup.position.set(0, y + roofGap, 0);
+    g.add(crownGroup);
   }
 
   // plinth so the tower reads as seated on its lot

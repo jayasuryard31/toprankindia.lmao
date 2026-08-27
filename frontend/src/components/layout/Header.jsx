@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "../../context/ThemeContext";
+import { useMapStore } from "../map/useMapStore";
 import CommandSearch from "../common/CommandSearch";
 import {
   IconSearch,
@@ -17,7 +18,7 @@ export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const location = useLocation();
-  const navigate = useNavigate();
+  const inCity = useMapStore((s) => s.inCity);
 
   // Keyboard shortcut listener for ⌘K and /
   useEffect(() => {
@@ -45,35 +46,30 @@ export default function Header() {
     return location.pathname.startsWith(path);
   };
 
-  const handleStatsClick = () => {
-    if (location.pathname !== "/") {
-      navigate("/#stats");
-    } else {
-      const el = document.getElementById("platform-overview");
-      if (el) el.scrollIntoView({ behavior: "smooth" });
-    }
-  };
+  // Walking the city is a full-screen experience — the site chrome would sit
+  // on top of the game HUD, so it unmounts for the duration.
+  if (inCity) return null;
 
   return (
     <>
-      <header className="sticky top-3 z-40 px-3 sm:px-6 max-w-6xl mx-auto w-full pt-1 pb-2">
-        <div className="glass-panel rounded-2xl shadow-feather flex items-center justify-between px-3 sm:px-5 h-14 transition-all duration-200">
-          {/* Official TopRankIndia Logo & Typography */}
+      <header className="sticky top-0 z-50 w-full bg-surface/95 dark:bg-background/95 backdrop-blur-md border-b border-border/80 shadow-xs transition-colors duration-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-4">
+          {/* Official TopRankPlots Logo & Typography */}
           <Link
             to="/"
             className="flex items-center gap-2.5 group select-none flex-shrink-0"
           >
             <img
               src="/toprankindiaLOGO.png"
-              alt="TopRankIndia Logo"
-              className="h-7 sm:h-8 w-auto object-contain hover:opacity-95 transition-opacity"
+              alt="TopRankPlots Logo"
+              className="h-7 sm:h-8 w-auto object-contain hover:scale-105 transition-transform"
             />
             <span className="font-bold text-base sm:text-lg tracking-tight text-charcoal dark:text-cream group-hover:text-coral transition-colors flex items-center">
-              TopRank<span className="text-coral">India</span>
+              TopRank<span className="text-coral">Plots</span>
             </span>
           </Link>
 
-          {/* Desktop Floating Pill Navigation */}
+          {/* Desktop Navigation Links */}
           <nav className="hidden md:flex items-center bg-surface-soft/80 dark:bg-elevated/70 p-1 rounded-xl border border-border-subtle shadow-inner">
             {navLinks.map((link) => {
               const active = isActive(link.to);
@@ -92,12 +88,6 @@ export default function Header() {
                 </Link>
               );
             })}
-            <button
-              onClick={handleStatsClick}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-muted hover:text-charcoal dark:hover:text-cream transition-colors cursor-pointer"
-            >
-              Live Stats
-            </button>
           </nav>
 
           {/* Actions: Search, Theme Toggle, Profile */}
@@ -106,7 +96,7 @@ export default function Header() {
             <button
               onClick={() => setSearchOpen(true)}
               className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-surface-soft/80 dark:bg-elevated/80 border border-border hover:border-coral/40 text-muted hover:text-charcoal dark:hover:text-cream text-xs transition-all shadow-sm group cursor-pointer"
-              title="Search products (⌘K)"
+              title="Search products & plots (⌘K)"
             >
               <IconSearch className="w-3.5 h-3.5 group-hover:text-coral transition-colors" />
               <span className="hidden sm:inline font-medium">Search</span>
@@ -129,9 +119,12 @@ export default function Header() {
               )}
             </button>
 
-            {/* Profile Avatar / Founder Badge */}
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-200 to-orange-200 dark:from-amber-900/60 dark:to-orange-900/60 border border-border flex items-center justify-center text-xs font-bold text-coral select-none shadow-sm cursor-pointer overflow-hidden">
-              <span className="text-[11px]">🇮🇳</span>
+            {/* Global Metropolis Badge */}
+            <div
+              className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-200 to-indigo-200 dark:from-sky-900/60 dark:to-indigo-900/60 border border-border flex items-center justify-center text-xs font-bold text-sky-600 dark:text-sky-400 select-none shadow-sm cursor-pointer overflow-hidden"
+              title="TopRankPlots Global Metropolis"
+            >
+              <span className="text-[13px]">🌐</span>
             </div>
 
             {/* Mobile Menu Button */}
@@ -147,7 +140,7 @@ export default function Header() {
 
         {/* Mobile Dropdown Menu */}
         {mobileOpen && (
-          <div className="md:hidden mt-2 p-3 glass-panel rounded-2xl shadow-feather-lg flex flex-col gap-1.5 animate-in slide-in-from-top-2 duration-200">
+          <div className="md:hidden px-4 py-3 bg-surface/98 dark:bg-background/98 border-b border-border/80 shadow-md flex flex-col gap-1.5 animate-in slide-in-from-top-1 duration-150">
             {navLinks.map((link) => {
               const active = isActive(link.to);
               return (
@@ -166,15 +159,6 @@ export default function Header() {
                 </Link>
               );
             })}
-            <button
-              onClick={() => {
-                handleStatsClick();
-                setMobileOpen(false);
-              }}
-              className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold text-muted hover:text-charcoal dark:hover:text-white hover:bg-surface-soft dark:hover:bg-elevated text-left transition-colors cursor-pointer"
-            >
-              <span>Live Stats</span>
-            </button>
             <div className="pt-2 mt-1 border-t border-border/60 flex items-center justify-between px-3.5 text-xs text-muted">
               <span>Theme</span>
               <button

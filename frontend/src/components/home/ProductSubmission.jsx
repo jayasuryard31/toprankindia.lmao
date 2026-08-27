@@ -71,7 +71,7 @@ export default function ProductSubmission() {
     e.preventDefault();
 
     if (!isValidUrl(url)) {
-      toast.error("Please enter a valid website URL or domain (e.g. vegaedu.in)");
+      toast.error("Please enter a valid website URL or domain (e.g. websitename.com)");
       return;
     }
     if (!categoryId) {
@@ -108,9 +108,44 @@ export default function ProductSubmission() {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_placeholder",
         amount: order.amount * 100,
         currency: order.currency || "INR",
-        name: "TopRankIndia",
+        name: "TopRankPlots",
         description: `Rank product for ${formatINR(order.amount)}`,
         order_id: order.orderId,
+        prefill: {
+          name: "TopRankPlots Trader",
+          email: "trader@toprankworld.lol",
+          contact: "9999999999",
+        },
+        theme: {
+          color: "#F05A38",
+        },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: "UPI (UPI ID, Google Pay, PhonePe, Paytm)",
+                instruments: [
+                  {
+                    method: "upi",
+                    flows: ["intent", "collect"],
+                  },
+                ],
+              },
+              other: {
+                name: "Cards, NetBanking & Wallets",
+                instruments: [
+                  { method: "card" },
+                  { method: "netbanking" },
+                  { method: "wallet" },
+                ],
+              },
+            },
+            sequence: ["block.upi", "block.other"],
+            preferences: {
+              show_default_blocks: true,
+            },
+          },
+        },
         handler: async (response) => {
           setLoading(true);
           setLoadingStep("Verifying payment and updating leaderboard...");
@@ -209,7 +244,7 @@ export default function ProductSubmission() {
                   setUrl(e.target.value);
                   setFaviconError(false);
                 }}
-                placeholder="Paste your website URL (e.g. vegaedu.in or https://...)"
+                placeholder="Paste your website URL (e.g. websitename.com or https://...)"
                 required
                 className="w-full pl-10 pr-4 py-3 bg-surface/90 dark:bg-surface/90 border border-border rounded-2xl text-charcoal dark:text-cream placeholder:text-muted/60 text-sm focus:outline-none focus:ring-2 focus:ring-coral/30 focus:border-coral transition-all shadow-sm"
               />

@@ -52,7 +52,7 @@ export default function BidBar({ onPaymentSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!isValidUrl(url)) {
-      toast.error("Please enter a valid website URL or domain (e.g. vegaedu.in)");
+      toast.error("Please enter a valid website URL or domain (e.g. websitename.com)");
       return;
     }
     if (!categoryId) {
@@ -86,9 +86,44 @@ export default function BidBar({ onPaymentSuccess }) {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_placeholder",
         amount: order.amount * 100,
         currency: order.currency || "INR",
-        name: "TopRankIndia City",
+        name: "TopRankPlots Metropolis",
         description: `Build skyline spot for ${format(order.amount)}`,
         order_id: order.orderId,
+        prefill: {
+          name: "TopRankPlots Trader",
+          email: "trader@toprankworld.lol",
+          contact: "9999999999",
+        },
+        theme: {
+          color: "#F05A38",
+        },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: "UPI (UPI ID, Google Pay, PhonePe, Paytm)",
+                instruments: [
+                  {
+                    method: "upi",
+                    flows: ["intent", "collect"],
+                  },
+                ],
+              },
+              other: {
+                name: "Cards, NetBanking & Wallets",
+                instruments: [
+                  { method: "card" },
+                  { method: "netbanking" },
+                  { method: "wallet" },
+                ],
+              },
+            },
+            sequence: ["block.upi", "block.other"],
+            preferences: {
+              show_default_blocks: true,
+            },
+          },
+        },
         handler: async (response) => {
           setLoading(true);
           try {
@@ -153,7 +188,7 @@ export default function BidBar({ onPaymentSuccess }) {
                 setUrl(e.target.value);
                 setFaviconError(false);
               }}
-              placeholder="Website URL (e.g. vegaedu.in)"
+              placeholder="Website URL (e.g. websitename.com)"
               required
               className="w-full pl-9 pr-3 py-2 bg-surface/90 dark:bg-surface/90 border border-border/70 rounded-xl text-xs text-charcoal dark:text-cream placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-coral/30"
             />
