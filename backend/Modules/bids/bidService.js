@@ -9,7 +9,7 @@ async function createBid(data) {
       amount: data.amount,
       currency: data.currency || "INR",
       razorpayOrderId: data.razorpayOrderId,
-      razorpayPaymentId: data.razorpayPaymentId || "",
+      razorpayPaymentId: data.razorpayPaymentId || null,
       status: data.status || "CREATED",
     },
   });

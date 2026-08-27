@@ -108,7 +108,7 @@ export default function Home() {
           onOutbidSuccess={handlePaymentSuccess}
         />
 
-        {/* 3. Floating Left Sidebar (Velora Harbor Stats, District Filters & Live Activity) */}
+        {/* 3. Floating Left Sidebar (Velora Harbor Stats & District Filters) */}
         <div className="absolute top-20 left-4 md:left-6 z-20 hidden md:block pointer-events-none">
           <div className="pointer-events-auto">
             <LeftSidebar
@@ -117,7 +117,6 @@ export default function Home() {
               onSelectCategory={(id) => setActiveCategoryId(id)}
               onFocusTopSpot={handleFocusTopSpot}
               onOpenSearch={() => setSearchOpen(true)}
-              recentActivity={recentActivity}
             />
           </div>
         </div>

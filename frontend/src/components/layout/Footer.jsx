@@ -1,6 +1,11 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 export default function Footer() {
+  const location = useLocation();
+
+  if (location.pathname === "/") {
+    return null;
+  }
   return (
     <footer className="mt-20 border-t border-border/70 dark:border-border/70 bg-surface/60 dark:bg-surface-soft/40 backdrop-blur-md">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">

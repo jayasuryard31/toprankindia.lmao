@@ -1,7 +1,6 @@
 import { useStats } from "../../hooks/useStats";
 import { formatINR } from "../../utils/formatINR";
-import { timeAgo } from "../../utils/formatDate";
-import { IconGrid, IconCrown, IconSearch, IconFlame } from "../common/Icons";
+import { IconGrid, IconCrown, IconSearch } from "../common/Icons";
 
 export default function LeftSidebar({
   categories = [],
@@ -9,7 +8,6 @@ export default function LeftSidebar({
   onSelectCategory,
   onFocusTopSpot,
   onOpenSearch,
-  recentActivity = [],
 }) {
   const { data: stats } = useStats();
 
@@ -161,44 +159,6 @@ export default function LeftSidebar({
               </button>
             );
           })}
-        </div>
-      </div>
-
-      {/* 4. Live Activity (Bottom Left) */}
-      <div className="glass-panel p-3.5 rounded-3xl shadow-feather border border-border/80">
-        <div className="flex items-center justify-between mb-2 px-1">
-          <div className="flex items-center gap-1.5">
-            <IconFlame className="w-3.5 h-3.5 text-coral" />
-            <span className="font-bold text-[11px] uppercase tracking-wider text-charcoal dark:text-cream">
-              Live Activity
-            </span>
-          </div>
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            LIVE
-          </span>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          {recentActivity.slice(0, 4).map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between gap-2 p-1.5 rounded-xl hover:bg-surface-soft dark:hover:bg-elevated transition-colors text-xs"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="text-charcoal dark:text-cream truncate">
-                  <span className="font-bold">{item.websiteName}</span>{" "}
-                  <span className="text-muted">outbid</span>
-                </div>
-                <span className="text-[10px] text-muted-light">
-                  {timeAgo(item.createdAt)}
-                </span>
-              </div>
-              <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                +{formatINR(item.amount)}
-              </span>
-            </div>
-          ))}
         </div>
       </div>
     </div>

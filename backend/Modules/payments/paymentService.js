@@ -14,8 +14,8 @@ async function createPayment(data) {
     data: {
       productId: data.productId,
       razorpayOrderId: data.razorpayOrderId,
-      razorpayPaymentId: data.razorpayPaymentId || "",
-      razorpaySignature: data.razorpaySignature || "",
+      razorpayPaymentId: data.razorpayPaymentId || null,
+      razorpaySignature: data.razorpaySignature || null,
       amount: data.amount,
       currency: data.currency || "INR",
       status: data.status || "CREATED",
