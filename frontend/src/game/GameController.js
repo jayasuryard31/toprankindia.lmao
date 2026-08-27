@@ -20,7 +20,7 @@ export class GameController {
     this.phase = "idle"; // idle -> cinematic -> playing -> leaving
     this.input = {
       forward: false, back: false, left: false, right: false,
-      run: true, sprint: false, crouch: false, jumpPressed: false,
+      run: false, sprint: false, crouch: false, jumpPressed: false,
     };
     this.player = null;
     this.char = null;
@@ -213,7 +213,7 @@ export class GameController {
       vy: cs.vy,
     });
 
-    this.cam.update(dt, cs.pos, { sprint: this.input.sprint });
+    this.cam.update(dt, cs.pos, { sprint: Boolean(this.input.sprint || this.input.run) });
 
     // interaction + locate at a lower cadence
     this._scanAcc = (this._scanAcc || 0) + dt;

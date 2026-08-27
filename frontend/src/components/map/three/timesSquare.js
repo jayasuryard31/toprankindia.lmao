@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js";
 import { GRID, timesSquareRect } from "./cityGrid.js";
-import { MAT, makeStreetlight, makePeople, finishTex, mulberry } from "./cityProps.js";
-import { SIGN_LIGHT } from "./brandShowcase.js";
+import { makeStreetlight, makePeople, finishTex, mulberry } from "./cityProps.js";
+import { SIGN_LIGHT, CITY_BILLBOARD_LOCATIONS } from "./brandShowcase.js";
 
 /**
  * timesSquare.js — the crossroads, built to match the real place.
@@ -266,6 +266,76 @@ function frontages(rect) {
   ].map((f) => ({ ...f, cx, cz }));
 }
 
+/** Where the landmark screen stack is mounted on the south frontage. */
+const LANDMARK_X_OFFSET = 62;
+const LANDMARK_W = 20;
+
+/**
+ * Wall space that the AMBIENT sign wall must leave alone.
+ *
+ * The bookable billboards (CITY_BILLBOARD_LOCATIONS) are mounted flat on these
+ * same four walls, so without this the procedural wall would bury the one
+ * inventory a player can actually buy. Zones are derived from the definitions
+ * themselves rather than duplicated, so moving a billboard moves its hole.
+ *
+ * Each zone is expressed in the wall's own frame: `axis` is the direction the
+ * wall runs, `perp` fixes which wall it is on, `a0..a1` is the span along it
+ * and `y0..y1` the height band.
+ */
+function reservedZones(rect) {
+  const MARGIN = 2.5;
+  const zones = [];
+
+  CITY_BILLBOARD_LOCATIONS.forEach((def) => {
+    if (def.anchor !== "times") return;
+    const mount = def.mount || (def.isGantry ? "gantry" : "pole");
+    if (mount !== "facade" && mount !== "folded") return; // poles stand in the open
+
+    const pos = def.getPos(rect);
+    const yaw = pos.yaw || 0;
+    // yaw 0 / π face along Z, so the panel spans X; ±π/2 spans Z.
+    const spansX = Math.abs(Math.cos(yaw)) > 0.5;
+    const halfW = (def.width || 12) / 2 + MARGIN;
+    const y0 = (def.elevation ?? 8) - MARGIN;
+    const y1 = y0 + (def.height || 8) + MARGIN * 2;
+
+    zones.push({
+      axis: spansX ? "x" : "z",
+      perp: spansX ? pos.z : pos.x,
+      a0: (spansX ? pos.x : pos.z) - halfW,
+      a1: (spansX ? pos.x : pos.z) + halfW,
+      y0,
+      y1,
+    });
+  });
+
+  // The landmark stack owns its whole column of the south wall.
+  zones.push({
+    axis: "x",
+    perp: rect.z1 + 16,
+    a0: rect.cx + LANDMARK_X_OFFSET - LANDMARK_W / 2 - MARGIN,
+    a1: rect.cx + LANDMARK_X_OFFSET + LANDMARK_W / 2 + MARGIN,
+    y0: 0,
+    y1: 145,
+  });
+
+  return zones;
+}
+
+/** True if a candidate panel would sit on top of reserved wall space. */
+function isReserved(zones, frontage, along, y, halfAlong, halfY) {
+  const axis = frontage.out.z ? "x" : "z";
+  const perp = frontage.out.z ? frontage.at(0.5).z : frontage.at(0.5).x;
+  for (const z of zones) {
+    if (z.axis !== axis) continue;
+    if (Math.abs(z.perp - perp) > 4) continue;
+    if (along + halfAlong < z.a0 || along - halfAlong > z.a1) continue;
+    if (y + halfY < z.y0 || y - halfY > z.y1) continue;
+    return true;
+  }
+  return false;
+}
+
 // ── The sign wall ─────────────────────────────────────────────────────
 
 /**
@@ -279,6 +349,7 @@ function frontages(rect) {
 function buildSignWall(engine, group, rect, bank) {
   const r = mulberry(4242);
   const atmo = engine.atmo;
+  const zones = reservedZones(rect);
 
   // texture id -> geometry list
   const buckets = new Map();
@@ -301,11 +372,14 @@ function buildSignWall(engine, group, rect, bank) {
 
       // A tall vertical banner claims the whole bay now and then — these are
       // the building-height posters that give the square its scale.
+      const alongOf = (pt) => (f.out.z ? pt.x : pt.z);
+
       if (r() < 0.22) {
         const bw = Math.min(bayW * 0.72, 12);
         const bh = 22 + r() * 26;
         const y = SHOP_TOP + 2 + r() * 10;
         const depth = 0.55 + r() * 0.5;
+        if (isReserved(zones, f, alongOf(mid), y + bh / 2, bw / 2, bh / 2)) continue;
         const m = new THREE.Matrix4()
           .makeRotationY(f.yaw)
           .setPosition(mid.x + f.out.x * depth, y + bh / 2, mid.z + f.out.z * depth);
@@ -324,6 +398,11 @@ function buildSignWall(engine, group, rect, bank) {
         const ph = ribbon ? 3.2 + r() * 1.6 : 7 + r() * 6;
         const pw = bayW * (0.8 + r() * 0.18);
         const depth = 0.5 + r() * 0.6;
+        if (isReserved(zones, f, alongOf(mid), y + ph / 2, pw / 2, ph / 2)) {
+          y += ph + 0.7;
+          n++;
+          continue;
+        }
         const cxp = mid.x + f.out.x * depth;
         const czp = mid.z + f.out.z * depth;
         const m = new THREE.Matrix4()
@@ -348,6 +427,7 @@ function buildSignWall(engine, group, rect, bank) {
       const p = f.at(end ? 0.985 : 0.015);
       const bh = 9 + r() * 7;
       const y = SHOP_TOP + 4 + r() * 14;
+      if (isReserved(zones, f, f.out.z ? p.x : p.z, y + bh / 2, 6, bh / 2)) return;
       const m = new THREE.Matrix4()
         .makeRotationY(f.yaw + (end ? -0.72 : 0.72))
         .setPosition(p.x + f.out.x * 1.2, y + bh / 2, p.z + f.out.z * 1.2);
@@ -502,13 +582,16 @@ function buildShopFronts(engine, group, rect, bank) {
  * all. It is mounted on the face of the building that already stands there,
  * so it needs no lot of its own.
  */
-function buildLandmarkStack(engine, group, rect) {
-  const x = rect.cx - 38; // centred on the lot nearest the avenue
+function buildLandmarkStack(engine, group, rect, bank) {
+  // Set east of the avenue mouth: a 20m slab centred on the avenue itself
+  // would hang over the open roadway with no building behind it, and the three
+  // bookable south screens already own the wall either side of centre.
+  const x = rect.cx + LANDMARK_X_OFFSET;
   const z = rect.z1 + 16; // the south frontage wall line
   const atmo = engine.atmo;
 
   const shaft = new THREE.Mesh(
-    new THREE.BoxGeometry(20, 120, 3),
+    new THREE.BoxGeometry(LANDMARK_W, 120, 3),
     new THREE.MeshStandardMaterial({ color: 0x0b0e13, roughness: 0.55, metalness: 0.6 })
   );
   shaft.position.set(x, 62, z - 1.6);
@@ -517,14 +600,14 @@ function buildLandmarkStack(engine, group, rect) {
   group.add(shaft);
 
   // A column of screens climbing the shaft, largest at the bottom.
-  const bank = [];
+  const panels = [];
   let y = 12;
   let i = 0;
   while (y < 112) {
     const h = i < 3 ? 20 : 12;
-    const tex = makeAdTexture(i % 2 ? "tall" : "wide", 500 + i);
+    const tex = i % 2 ? bank.tall[i % bank.tall.length] : bank.wide[i % bank.wide.length];
     const panel = new THREE.Mesh(
-      new THREE.PlaneGeometry(17, h - 2),
+      new THREE.PlaneGeometry(LANDMARK_W - 3, h - 2),
       new THREE.MeshStandardMaterial({
         map: tex,
         emissiveMap: tex,
@@ -537,7 +620,7 @@ function buildLandmarkStack(engine, group, rect) {
     panel.rotation.y = Math.PI;
     panel.userData.pulse = 0.6 + (i % 5) * 0.2;
     panel.userData.baseEmissive = SIGN_LIGHT.screen;
-    bank.push(panel);
+    panels.push(panel);
     group.add(panel);
     y += h;
     i++;
@@ -566,7 +649,7 @@ function buildLandmarkStack(engine, group, rect) {
   ball.layers.enable(1);
   group.add(ball);
 
-  return bank;
+  return panels;
 }
 
 // ── Plaza furniture ───────────────────────────────────────────────────
@@ -746,31 +829,262 @@ function buildStreetClutter(engine, group, rect, pads) {
   });
 }
 
+// ── Market stalls ─────────────────────────────────────────────────────
+
+const STALL_GOODS = [
+  { label: "HOT DOGS", canopy: 0xd23b30, goods: [0xe8a33d, 0xc0392b, 0xf2d29b] },
+  { label: "PRETZELS", canopy: 0xe8b32c, goods: [0xc98b3a, 0xa9702c, 0xe7c98a] },
+  { label: "SOUVENIRS", canopy: 0x2f7fd6, goods: [0xe23b2e, 0x2fb37a, 0xffd23f, 0x8f5bff] },
+  { label: "I ♥ VELORA", canopy: 0xc0392b, goods: [0xffffff, 0xe23b2e, 0x1f2937] },
+  { label: "FRESH FRUIT", canopy: 0x2fb37a, goods: [0xe8563f, 0x8bc34a, 0xf5b800, 0xd94f7a] },
+  { label: "COFFEE", canopy: 0x6b4a2f, goods: [0x3b2a1c, 0xd9c7a8, 0x8a6242] },
+  { label: "ART PRINTS", canopy: 0x8f5bff, goods: [0x22d3ee, 0xfb7185, 0xa3e635] },
+  { label: "CAPS & TEES", canopy: 0x0ea5e9, goods: [0x1f2937, 0xf5f3ee, 0xe23b2e] },
+];
+
+/** A canvas strip for the stall's canopy valance: awning stripes + the trade. */
+function stallSignTexture(label, canopyHex, seed) {
+  const W = 512;
+  const H = 128;
+  const cv = document.createElement("canvas");
+  cv.width = W;
+  cv.height = H;
+  const ctx = cv.getContext("2d");
+  const c = `#${canopyHex.toString(16).padStart(6, "0")}`;
+
+  // classic awning stripes
+  const stripe = 42;
+  for (let x = -stripe; x < W + stripe; x += stripe * 2) {
+    ctx.fillStyle = c;
+    ctx.fillRect(x, 0, stripe, H);
+    ctx.fillStyle = "#f7f4ee";
+    ctx.fillRect(x + stripe, 0, stripe, H);
+  }
+  // hand-painted valance board
+  ctx.fillStyle = "rgba(20,20,24,0.86)";
+  ctx.fillRect(0, H * 0.34, W, H * 0.44);
+  ctx.fillStyle = "#ffe9a8";
+  ctx.font = "900 46px 'Inter', Impact, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, W / 2, H * 0.57);
+  void seed;
+  return finishTex(cv);
+}
+
+/**
+ * The street market that fills the pedestrian pads.
+ *
+ * Real Times Square pavement is lined with vendors — carts, folding tables
+ * under striped canopies, racks of shirts and caps. Each stall here is a
+ * counter, a striped canopy with a painted valance, a crate of goods, a
+ * price board and a vendor standing behind it, so the plaza reads as somewhere
+ * that trades rather than an empty concourse.
+ *
+ * Returns the vendor/queue positions so the crowd builder can put people in
+ * front of the stalls instead of scattering them at random.
+ */
+function buildMarketStalls(engine, group, pads) {
+  const r = mulberry(5150);
+  const people = [];
+
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x6a6f78, roughness: 0.45, metalness: 0.65 });
+  const counterMat = new THREE.MeshStandardMaterial({ color: 0xcfc6b6, roughness: 0.85 });
+  const crateMat = new THREE.MeshStandardMaterial({ color: 0x8a6242, roughness: 0.95 });
+
+  pads.forEach((pad, pi) => {
+    // A row of stalls set back along the pad's outer edge, facing the crossing,
+    // leaving the middle clear for the café tables and the through-crowd.
+    const STALLS = 4;
+    for (let k = 0; k < STALLS; k++) {
+      const kind = STALL_GOODS[(pi * STALLS + k) % STALL_GOODS.length];
+      const sx = pad.cx + (k / (STALLS - 1) - 0.5) * pad.w * 0.72;
+      const sz = pad.cz + pad.sz * pad.d * 0.36;
+      const facing = pad.sz > 0 ? Math.PI : 0; // look back toward the crossing
+
+      const stall = new THREE.Group();
+      stall.position.set(sx, 0.24, sz);
+      stall.rotation.y = facing;
+
+      // counter
+      const counter = new THREE.Mesh(new THREE.BoxGeometry(4.0, 1.0, 1.5), counterMat);
+      counter.position.y = 0.5;
+      counter.castShadow = true;
+      counter.receiveShadow = true;
+      stall.add(counter);
+
+      // four corner poles
+      [-1, 1].forEach((ox) => {
+        [-1, 1].forEach((oz) => {
+          const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.6, 6), frameMat);
+          pole.position.set(ox * 2.05, 1.3, oz * 0.85);
+          stall.add(pole);
+        });
+      });
+
+      // striped canopy + painted valance
+      const canopyTex = stallSignTexture(kind.label, kind.canopy, k);
+      const canopyMat = new THREE.MeshStandardMaterial({
+        map: canopyTex,
+        roughness: 0.9,
+        side: THREE.DoubleSide,
+      });
+      const roof = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 2.4), canopyMat);
+      roof.rotation.x = -Math.PI / 2;
+      roof.position.y = 2.6;
+      stall.add(roof);
+      const valance = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 0.7), canopyMat);
+      valance.position.set(0, 2.35, 1.2);
+      stall.add(valance);
+
+      // goods heaped on the counter
+      kind.goods.forEach((hex, gi) => {
+        const goodsMat = new THREE.MeshStandardMaterial({ color: hex, roughness: 0.8 });
+        const n = 3;
+        for (let gj = 0; gj < n; gj++) {
+          const item = new THREE.Mesh(
+            new THREE.BoxGeometry(0.34, 0.22, 0.3),
+            goodsMat
+          );
+          item.position.set(
+            -1.6 + gi * 0.95 + (r() - 0.5) * 0.2,
+            1.06 + gj * 0.23,
+            -0.2 + (r() - 0.5) * 0.5
+          );
+          item.rotation.y = r() * 0.6;
+          item.castShadow = true;
+          stall.add(item);
+        }
+      });
+
+      // stock crate tucked behind
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.8, 0.9), crateMat);
+      crate.position.set(1.4, 0.4, -1.1);
+      crate.castShadow = true;
+      stall.add(crate);
+
+      group.add(stall);
+      engine.propColliders.push({
+        cx: sx, cz: sz, hw: 2.3, hd: 1.2, h: 2.6, rot: facing, prop: true,
+      });
+
+      // The vendor stands behind the counter; shoppers queue in front of it.
+      const behind = pad.sz > 0 ? 1 : -1;
+      people.push({ x: sx, z: sz + behind * 1.5, yaw: facing + Math.PI, kind: "vendor" });
+      for (let q = 0; q < 3; q++) {
+        people.push({
+          x: sx - 1.2 + q * 1.2 + (r() - 0.5) * 0.4,
+          z: sz - behind * (1.9 + q * 0.75),
+          yaw: facing,
+          kind: "queue",
+        });
+      }
+    }
+  });
+
+  return people;
+}
+
 // ── Crowd ─────────────────────────────────────────────────────────────
 
 /**
- * A dense standing crowd on top of the walking NPCs.
+ * The standing crowd — arranged, not scattered.
  *
- * The animated NpcSystem gives the square its motion, but a couple of hundred
- * walkers still leaves visible pavement. These are static instanced figures —
- * six draw calls for the lot — packed into the gaps so the plaza reads as
- * genuinely full, which is the single most recognisable thing about the place.
+ * The animated NpcSystem supplies motion; these are the static instanced
+ * figures that make the plaza genuinely full (six draw calls for the lot).
+ * Random scatter reads as a fairground, so people are placed the way they
+ * actually stand in the square:
+ *
+ *   • vendors behind their counters, shoppers queueing in front of them
+ *   • dense ranks along the kerbs, faces turned up at the sign wall
+ *   • rows seated up the red steps
+ *   • knots around the café tables
+ *   • tight platoons waiting at each crosswalk, all facing the same way
+ *
+ * @param stallPeople vendor/queue slots handed over by buildMarketStalls
  */
-function buildCrowd(engine, group, pads) {
+function buildCrowd(engine, group, pads, rect, stallPeople = []) {
   const r = mulberry(20240);
   const positions = [];
-  const PER_PAD = 78;
+  const jitter = (k) => (r() - 0.5) * k;
+
+  // 1. Market vendors and their queues — already positioned, just adopt them.
+  stallPeople.forEach((p) => positions.push([p.x, p.z, p.yaw]));
 
   pads.forEach((pad) => {
-    for (let i = 0; i < PER_PAD; i++) {
-      // Biased toward the kerb-facing half of the pad, where people actually
-      // stand to look at the signs.
-      const bias = Math.pow(r(), 0.7);
-      const px = pad.cx + (r() - 0.5) * pad.w * 0.92;
-      const pz = pad.cz - pad.sz * (bias - 0.5) * pad.d * 0.9;
-      // most face the middle of the crossing, phones up
-      const toward = Math.atan2(-pad.sx, -pad.sz) + (r() - 0.5) * 1.9;
-      positions.push([px, pz, toward]);
+    // 2. Kerb ranks: two rows along each road-facing edge, looking up and out
+    //    at the screens across the crossing. This is the signature pose.
+    const xInner = pad.cx - pad.sx * (pad.w / 2);
+    const zInner = pad.cz - pad.sz * (pad.d / 2);
+    for (let row = 0; row < 2; row++) {
+      for (let k = 0; k < 16; k++) {
+        const bz = pad.cz + (k / 15 - 0.5) * pad.d * 0.92;
+        positions.push([
+          xInner + pad.sx * (2.6 + row * 1.5) + jitter(0.5),
+          bz + jitter(0.6),
+          Math.atan2(-pad.sx, 0) + jitter(0.5),
+        ]);
+      }
+      for (let k = 0; k < 18; k++) {
+        const bx = pad.cx + (k / 17 - 0.5) * pad.w * 0.92;
+        positions.push([
+          bx + jitter(0.6),
+          zInner + pad.sz * (2.6 + row * 1.5) + jitter(0.5),
+          Math.atan2(0, -pad.sz) + jitter(0.5),
+        ]);
+      }
+    }
+
+    // 3. Loose knots around the café tables in the middle of the pad.
+    for (let c = 0; c < 6; c++) {
+      const gx = pad.cx + jitter(pad.w * 0.5);
+      const gz = pad.cz + jitter(pad.d * 0.4);
+      const n = 3 + Math.floor(r() * 3);
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + r();
+        positions.push([
+          gx + Math.cos(a) * (1.1 + r() * 0.6),
+          gz + Math.sin(a) * (1.1 + r() * 0.6),
+          a + Math.PI, // facing into the huddle
+        ]);
+      }
+    }
+  });
+
+  // 4. Seated ranks up the red steps on the north-west pad.
+  const stepPad = pads.find((q) => q.sx < 0 && q.sz < 0);
+  if (stepPad) {
+    for (let tier = 0; tier < 8; tier++) {
+      for (let k = 0; k < 9; k++) {
+        positions.push([
+          stepPad.cx + (k / 8 - 0.5) * stepPad.w * 0.55 + jitter(0.4),
+          stepPad.cz - stepPad.d * 0.3 + tier * 1.9 + jitter(0.3),
+          Math.PI, // all looking back down over the square
+        ]);
+      }
+    }
+  }
+
+  // 5. Platoons waiting to cross, banked up at each crosswalk head and all
+  //    pointing the same way — the tell-tale shape of a real junction.
+  const AV = GRID.ROAD_W_AVENUE / 2;
+  const ST = GRID.ROAD_W_STREET / 2;
+  [
+    { x: rect.cx, z: rect.cz - ST - 8, yaw: 0, spread: "x" },
+    { x: rect.cx, z: rect.cz + ST + 8, yaw: Math.PI, spread: "x" },
+    { x: rect.cx - AV - 8, z: rect.cz, yaw: Math.PI / 2, spread: "z" },
+    { x: rect.cx + AV + 8, z: rect.cz, yaw: -Math.PI / 2, spread: "z" },
+  ].forEach((head) => {
+    for (let k = 0; k < 22; k++) {
+      const lane = (k % 6) / 5 - 0.5;
+      const rank = Math.floor(k / 6);
+      const along = lane * 9;
+      const back = rank * 1.5;
+      positions.push([
+        head.x + (head.spread === "x" ? along : -Math.sin(head.yaw) * back),
+        head.z + (head.spread === "z" ? along : -Math.cos(head.yaw) * back),
+        head.yaw + jitter(0.25),
+      ]);
     }
   });
 
@@ -927,12 +1241,19 @@ export function buildTimesSquare(engine) {
   });
 
   // ── Signage, retail, landmark ───────────────────────────────────────
+  // Everything that stands up off the pavement goes in one sub-group, purely
+  // for legibility. The 2D plan view hides the whole environmentGroup, so this
+  // does not need tagging to disappear on the map.
+  const upright = new THREE.Group();
+  upright.name = "times-square-upright";
+  g.add(upright);
+
   const bank = makeAdBank();
   engine._tsPanels = [
-    ...buildSignWall(engine, g, ts, bank),
-    ...buildLandmarkStack(engine, g, ts),
+    ...buildSignWall(engine, upright, ts, bank),
+    ...buildLandmarkStack(engine, upright, ts, bank),
   ];
-  buildShopFronts(engine, g, ts, bank);
+  buildShopFronts(engine, upright, ts, bank);
 
   // ── Lighting ────────────────────────────────────────────────────────
   engine.timesSquarePads.forEach((pad) => {
@@ -977,12 +1298,10 @@ export function buildTimesSquare(engine) {
   });
 
   // ── Furniture, clutter, crowd ───────────────────────────────────────
-  buildPlazaFurniture(engine, g, engine.timesSquarePads);
-  buildStreetClutter(engine, g, ts, engine.timesSquarePads);
-  buildCrowd(engine, g, engine.timesSquarePads);
-
-  // Keep the lamp bank in step with the clock even on a mid-session rebuild.
-  MAT.lampGlobe.needsUpdate = true;
+  buildPlazaFurniture(engine, upright, engine.timesSquarePads);
+  buildStreetClutter(engine, upright, ts, engine.timesSquarePads);
+  const stallPeople = buildMarketStalls(engine, upright, engine.timesSquarePads);
+  buildCrowd(engine, upright, engine.timesSquarePads, ts, stallPeople);
 
   engine.environmentGroup.add(g);
   engine.timesSquareGroup = g;

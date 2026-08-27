@@ -67,6 +67,7 @@ import {
   setSignageMode,
 } from "./brandShowcase";
 import { buildTimesSquare as buildTimesSquareScene } from "./timesSquare";
+import { RailwaySystem } from "./railway";
 import { NpcSystem } from "../../../game/systems/npc/NpcSystem.js";
 import { TrafficLightSystem } from "../../../game/systems/traffic/TrafficLightSystem.js";
 
@@ -246,6 +247,7 @@ export class ThreeCityEngine {
       () => { this.buildCoastline(); this.buildGreenbelt(); },
       () => this.buildTreesAndProps(),
       () => { this.buildTraffic(); this.trafficLightSystem = new TrafficLightSystem(this); },
+      () => { this.railway = new RailwaySystem(this); },
       () => { this.npcSystem = new NpcSystem(this); },
     ];
     this._pumpBuildQueue();
@@ -262,7 +264,16 @@ export class ThreeCityEngine {
     const run = () => {
       this._buildHandle = null;
       if (this._destroyed) return;
-      step();
+      // One failing chunk must never take the rest of the city with it. An
+      // uncaught throw here used to abort the whole queue silently, so a small
+      // mistake deep in one builder left the map missing Times Square, the
+      // traffic, the railway AND the crowds with nothing in the console to
+      // say which one broke.
+      try {
+        step();
+      } catch (err) {
+        console.error("[ThreeCityEngine] build step failed:", err);
+      }
       this.invalidateSolids();
       this.onProjectUpdate();
       this._pumpBuildQueue();
@@ -2194,6 +2205,7 @@ export class ThreeCityEngine {
     for (let i = 0; i < this.fillerSlots.length; i++) {
       const sl = this.fillerSlots[i];
       if (!sl || !sl.plan?.fill) continue;
+      if (sl.reserved) continue; // a station or other landmark stands here
       if (this.fillerHidden?.has(i)) continue; // a brand tower replaced it
       const d = Math.hypot(sl.lot.cx - x, sl.lot.cz - z);
       if (d < bestD) {
@@ -2228,6 +2240,24 @@ export class ThreeCityEngine {
       plotNumber: info?.plotNumber || "PLOT-????",
       district: info?.district,
     };
+  }
+
+  /**
+   * Hide any pre-built stock standing within `radius` of a point, and take it
+   * off the market. Used when an authored landmark (a station headhouse) is
+   * dropped onto a block the procedural filler had already built on.
+   */
+  clearLotsNear(x, z, radius = 20) {
+    if (!this.fillerSlots) return;
+    for (let i = 0; i < this.fillerSlots.length; i++) {
+      const sl = this.fillerSlots[i];
+      if (!sl || !sl.plan?.fill) continue;
+      if (Math.hypot(sl.lot.cx - x, sl.lot.cz - z) > radius) continue;
+      this.setFillerVisible(i, false);
+      this.fillerHidden?.add(i);
+      sl.reserved = true; // never offered for sale again
+    }
+    this._solids = null;
   }
 
   setFillerVisible(slotIndex, visible) {
@@ -3517,6 +3547,8 @@ export class ThreeCityEngine {
     this._solids = null;
     this.npcSystem?.dispose();
     this.npcSystem = null;
+    this.railway?.dispose();
+    this.railway = null;
 
     this.renderer.toneMappingExposure = this.atmo.exposure;
     this._fog.color.setHex(this.atmo.fogColor);
@@ -3623,6 +3655,8 @@ export class ThreeCityEngine {
         b.userData.tick?.(this._bbT, dt);
       }
     }
+    // The loop-line train runs whether you are on the map or in the street.
+    this.railway?.update(dt);
     if (live) this.npcSystem?.update(dt);
 
     // #1 landmark flourish — counter-rotating halos + a breathing beacon
@@ -4107,6 +4141,8 @@ export class ThreeCityEngine {
         });
       }
     }
+    // Car bodies, so walking into the train stops you. It is never boardable.
+    if (this.railway) out.push(...this.railway.getSolids());
     return out;
   }
 
@@ -4213,11 +4249,21 @@ export class ThreeCityEngine {
    * @param {number|null} preferredIndex - optional preferred index from server
    */
   getSpawnPoint(occupied = [], preferredIndex = null) {
-    const spots = this.getAllSpawnLocations();
+    const all = this.getAllSpawnLocations();
+
+    // Times Square is the front door. Nine times in ten you arrive in the
+    // crossroads itself; the remaining tenth is scattered across the rest of
+    // the map so the city never feels like it is only one square.
+    const inSquare = all.filter((s) => (s.area || "").startsWith("Times Square"));
+    const elsewhere = all.filter((s) => !(s.area || "").startsWith("Times Square"));
+    const spots =
+      inSquare.length && (Math.random() < 0.9 || !elsewhere.length)
+        ? inSquare
+        : elsewhere;
 
     // If a valid preferred index is specified and clear of other players
-    if (typeof preferredIndex === "number" && preferredIndex >= 0 && preferredIndex < spots.length) {
-      const pref = spots[preferredIndex];
+    if (typeof preferredIndex === "number" && preferredIndex >= 0 && preferredIndex < all.length) {
+      const pref = all[preferredIndex];
       const clear = occupied.every((occ) => {
         if (!occ) return true;
         const ox = occ.x ?? (occ.pos?.x ?? 0);

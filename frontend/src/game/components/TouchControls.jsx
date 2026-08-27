@@ -209,7 +209,7 @@ export default function TouchControls({ onInput, onLook, onInteract, onEmote, ha
               const v = !sprintOn;
               sprintRef.current = v;
               setSprintOn(v);
-              onInput({ sprint: v });
+              onInput({ sprint: v, run: v });
             }}
           />
           <Btn

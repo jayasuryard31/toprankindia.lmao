@@ -9,8 +9,8 @@ import { EMOTES, EMOTE_DURATIONS } from "../../characters/player/PlayerAnimator"
  * All tuning lives in TUNING so it can be surfaced in a debug panel later.
  */
 const TUNING = {
-  speed: { walk: 3.4, run: 6.4, sprint: 9.2, crouch: 1.9 },
-  accel: 26,
+  speed: { walk: 3.4, run: 7.2, sprint: 7.2, crouch: 1.8 },
+  accel: 28,
   decel: 34,
   airControl: 0.35,
   gravity: 26,
@@ -176,6 +176,7 @@ export class PlayerController {
     }
 
     // locomotion state
+    const isRunning = Boolean(input.sprint || input.run);
     const crouching = input.crouch && this.grounded;
     let moveState = "idle";
     let targetSpeed = 0;
@@ -183,10 +184,7 @@ export class PlayerController {
       if (crouching) {
         moveState = "crouch";
         targetSpeed = TUNING.speed.crouch;
-      } else if (input.sprint) {
-        moveState = "sprint";
-        targetSpeed = TUNING.speed.sprint;
-      } else if (input.run) {
+      } else if (isRunning) {
         moveState = "run";
         targetSpeed = TUNING.speed.run;
       } else {

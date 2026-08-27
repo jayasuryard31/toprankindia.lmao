@@ -2,8 +2,11 @@ const prisma = require("../../Config/DBConnect");
 const { BILLBOARD_CATALOG } = require("./billboardCatalog");
 
 /**
- * Initializes and synchronizes the 10 constant billboard records in the database.
- * If any billboard does not exist, it gets seeded with its canonical number, code, rate, and metadata.
+ * Seeds and re-synchronises every catalog slot (#1 – #24, Times Square
+ * included) into the database. Safe to call on every boot: an existing row
+ * keeps its booking state and only has its immutable spec refreshed, so
+ * re-pricing or re-sizing a slot in the catalog reaches a live database
+ * without ever cancelling somebody's paid placement.
  */
 async function initBillboards() {
   try {
@@ -22,6 +25,8 @@ async function initBillboards() {
           width: item.width,
           height: item.height,
           isGantry: item.isGantry,
+          mount: item.mount || "pole",
+          orientation: item.orientation || "landscape",
         },
         create: {
           billboardNumber: item.billboardNumber,
@@ -36,6 +41,8 @@ async function initBillboards() {
           width: item.width,
           height: item.height,
           isGantry: item.isGantry,
+          mount: item.mount || "pole",
+          orientation: item.orientation || "landscape",
           isOccupied: false,
           paymentStatus: "VACANT",
         },
@@ -162,6 +169,8 @@ async function bookBillboard({
         width: catalogDef.width,
         height: catalogDef.height,
         isGantry: catalogDef.isGantry,
+        mount: catalogDef.mount || "pole",
+        orientation: catalogDef.orientation || "landscape",
         isOccupied: true,
         paymentStatus: "PAID",
         activeUntil,

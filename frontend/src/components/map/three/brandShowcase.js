@@ -26,7 +26,7 @@ export function crispTexture(canvas, { srgb = true, repeat = null } = {}) {
 export const CRISP_ANISO = { v: 16 };
 export function setCrispAnisotropy(v) { CRISP_ANISO.v = Math.max(1, v || 1); }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
+const API_BASE = import.meta.env?.VITE_API_BASE_URL || "/api";
 
 export function proxyImageUrl(url) {
   if (!url) return "";

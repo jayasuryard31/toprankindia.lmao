@@ -100,22 +100,51 @@ export default function GameMode({ engine, onExit, onOutbidSuccess }) {
         ctrl()?.triggerEmote();
         return;
       }
+      if (e.key === "Shift" || e.code === "ShiftLeft" || e.code === "ShiftRight") {
+        ctrl()?.setInput({ sprint: true, run: true });
+        return;
+      }
       const k = KEYMAP[e.code];
-      if (k) ctrl()?.setInput({ [k]: true });
+      if (k) {
+        ctrl()?.setInput({ [k]: true, ...(e.shiftKey ? { sprint: true, run: true } : {}) });
+      }
     };
     const up = (e) => {
       if (e.code === "Space") {
         ctrl()?.setInput({ jumpHeld: false });
         return;
       }
+      if (e.key === "Shift" || e.code === "ShiftLeft" || e.code === "ShiftRight") {
+        ctrl()?.setInput({ sprint: false, run: false });
+        return;
+      }
       const k = KEYMAP[e.code];
-      if (k) ctrl()?.setInput({ [k]: false });
+      if (k) {
+        ctrl()?.setInput({ [k]: false, ...(!e.shiftKey ? { sprint: false, run: false } : {}) });
+      }
     };
+    const clearInput = () => {
+      ctrl()?.setInput({
+        forward: false,
+        back: false,
+        left: false,
+        right: false,
+        sprint: false,
+        run: false,
+        crouch: false,
+        jumpHeld: false,
+      });
+    };
+
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
+    window.addEventListener("blur", clearInput);
+    document.addEventListener("visibilitychange", clearInput);
     return () => {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", clearInput);
+      document.removeEventListener("visibilitychange", clearInput);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail, plot, booking]);

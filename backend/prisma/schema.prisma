@@ -113,6 +113,10 @@ model Billboard {
   width           Float     @default(14)
   height          Float     @default(7.5)
   isGantry        Boolean   @default(false) @map("is_gantry")
+  // How the slot is physically carried: facade | folded | gantry | pole.
+  // Times Square inventory is facade/folded — bolted to the buildings.
+  mount           String    @default("pole")
+  orientation     String    @default("landscape")
 
   isOccupied      Boolean   @default(false) @map("is_occupied")
   paymentStatus   String    @default("VACANT") @map("payment_status")

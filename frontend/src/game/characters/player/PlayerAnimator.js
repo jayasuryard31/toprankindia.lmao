@@ -84,8 +84,8 @@ export class PlayerAnimator {
 
     // ── blends ─────────────────────────────────────────────────────
     const bl = this.blend;
-    bl.walk = damp(bl.walk, moving && !running && !falling && !sitting ? 1 : 0, 11, dt);
-    bl.run = damp(bl.run, moving && running && !falling && !sitting ? 1 : 0, 9, dt);
+    bl.walk = damp(bl.walk, moving && !running && !falling && !sitting ? 1 : 0, 12, dt);
+    bl.run = damp(bl.run, moving && running && !falling && !sitting ? 1 : 0, 10, dt);
     bl.crouch = damp(bl.crouch, crouching && !falling && !sitting ? 1 : 0, 10, dt);
     bl.air = damp(bl.air, grounded || falling || sitting ? 0 : 1, 13, dt);
     bl.fall = damp(bl.fall, falling ? 1 : 0, 20, dt);
@@ -93,50 +93,55 @@ export class PlayerAnimator {
     bl.emote = damp(bl.emote, this.currentEmote && !moving && !falling && grounded && !sitting ? 1 : 0, 12, dt);
 
     // ── gait phase: stride frequency scales with actual speed ───────
-    const strideHz = moving ? THREE.MathUtils.clamp(speed * 0.62, 1.1, 3.4) : 0;
+    const strideHz = moving ? THREE.MathUtils.clamp(speed * (0.58 - 0.12 * bl.run), 1.2, 3.4) : 0;
     this.phase += dt * strideHz * Math.PI * 2;
     const ph = this.phase;
     const sin = Math.sin(ph);
     const cos = Math.cos(ph);
 
     const gait = bl.walk + bl.run;
-    const amp = lerp(0.42, 0.86, bl.run) * gait; // leg swing amplitude
-    const armAmp = lerp(0.34, 0.78, bl.run) * gait;
+    const amp = lerp(0.44, 0.90, bl.run) * gait; // leg swing amplitude
+    const armAmp = lerp(0.36, 0.88, bl.run) * gait;
 
     const t = { ...ZERO };
 
     // ── legs: swing + knee flexion + ankle roll ────────────────────
-    // Knees bend on the back-swing (never hyper-extend forward).
-    const kneeL = Math.max(0, -Math.sin(ph - 0.6)) * lerp(0.9, 1.55, bl.run) * gait;
-    const kneeR = Math.max(0, -Math.sin(ph + Math.PI - 0.6)) * lerp(0.9, 1.55, bl.run) * gait;
+    // Knees bend on the back-swing recovery (higher tuck during run)
+    const kneeL = Math.max(0, -Math.sin(ph - 0.55)) * lerp(0.85, 1.70, bl.run) * gait;
+    const kneeR = Math.max(0, -Math.sin(ph + Math.PI - 0.55)) * lerp(0.85, 1.70, bl.run) * gait;
     t.lHipP = sin * amp;
     t.rHipP = -sin * amp;
     t.lKnee = -kneeL;
     t.rKnee = -kneeR;
     // toe-off / heel-strike
-    t.lAnkle = -sin * 0.28 * gait;
-    t.rAnkle = sin * 0.28 * gait;
+    t.lAnkle = -sin * lerp(0.24, 0.42, bl.run) * gait;
+    t.rAnkle = sin * lerp(0.24, 0.42, bl.run) * gait;
 
-    // ── arms: counter-swing, outward clearance to prevent body clipping ──
+    // ── arms: counter-swing, athletic bent-elbow pump during run ──
     t.lShP = -sin * armAmp;
     t.rShP = sin * armAmp;
-    t.lShR = lerp(0.22, 0.32, bl.run); // arms held clearly away from ribs & hips
-    t.rShR = -lerp(0.22, 0.32, bl.run);
-    t.lElb = -(0.24 + Math.max(0, -sin) * lerp(0.5, 1.25, bl.run) * gait);
-    t.rElb = -(0.24 + Math.max(0, sin) * lerp(0.5, 1.25, bl.run) * gait);
+    t.lShR = lerp(0.22, 0.34, bl.run); // arms held clearly away from ribs & hips
+    t.rShR = -lerp(0.22, 0.34, bl.run);
+
+    const walkElbL = -(0.22 + Math.max(0, -sin) * 0.35);
+    const walkElbR = -(0.22 + Math.max(0, sin) * 0.35);
+    const runElbL = -(1.32 + Math.max(0, -sin) * 0.30 - Math.max(0, sin) * 0.12);
+    const runElbR = -(1.32 + Math.max(0, sin) * 0.30 - Math.max(0, -sin) * 0.12);
+    t.lElb = lerp(walkElbL, runElbL, bl.run) * gait;
+    t.rElb = lerp(walkElbR, runElbR, bl.run) * gait;
 
     // ── torso: bob, lean, counter-rotation ─────────────────────────
-    const bob = Math.abs(cos) * lerp(0.028, 0.062, bl.run) * gait;
+    const bob = Math.abs(cos) * lerp(0.026, 0.065, bl.run) * gait;
     t.hipY = -bob - bl.crouch * 0.34 - this.landImpact * 0.22;
-    t.hipRoll = sin * 0.045 * gait;
-    t.hipYaw = -sin * lerp(0.06, 0.13, bl.run) * gait;
-    t.chestYaw = sin * lerp(0.1, 0.2, bl.run) * gait; // shoulders counter the hips
+    t.hipRoll = sin * lerp(0.035, 0.055, bl.run) * gait;
+    t.hipYaw = -sin * lerp(0.05, 0.13, bl.run) * gait;
+    t.chestYaw = sin * lerp(0.08, 0.22, bl.run) * gait; // shoulders counter the hips
     t.spinePitch =
-      lerp(0.03, sprinting ? 0.3 : 0.19, bl.run) * gait + bl.crouch * 0.46 + this.landImpact * 0.3;
-    t.spineRoll = -sin * 0.03 * gait;
+      lerp(0.04, 0.24, bl.run) * gait + bl.crouch * 0.46 + this.landImpact * 0.3;
+    t.spineRoll = -sin * lerp(0.025, 0.04, bl.run) * gait;
     // head stays level regardless of what the spine does
     t.headPitch = -t.spinePitch * 0.72;
-    t.headYaw = -t.chestYaw * 0.3;
+    t.headYaw = -t.chestYaw * 0.35;
 
     // ── idle: breathing + natural hand actions + weight shift ───────
     const idleW = Math.max(0, 1 - gait - bl.air - bl.fall - bl.emote - bl.sit);
