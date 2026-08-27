@@ -267,11 +267,11 @@ export default function MapCanvas({
         </div>
       )}
 
-      {/* Enter City CTA — clears the mobile nav + Build Spot bar on phones */}
+      {/* Enter City CTA — on mobile: on top below navigation bar; on desktop: bottom-center */}
       {!gameActive && (
         <div
           className="absolute left-1/2 -translate-x-1/2 z-40 pointer-events-auto
-                     bottom-[8.25rem] md:bottom-[4.75rem] lg:bottom-[5.25rem]"
+                     top-3 sm:top-auto sm:bottom-[4.75rem] lg:bottom-[5.25rem]"
         >
           <EnterCityButton onClick={() => setGameActive(true)} />
         </div>
