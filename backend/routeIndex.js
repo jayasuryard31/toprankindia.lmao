@@ -8,6 +8,8 @@ const categoryRoutes = require("./Modules/categories/categoryRoutes");
 const statsRoutes = require("./Modules/stats/statsRoutes");
 const homeRoutes = require("./Modules/home/homeRoutes");
 const mapRoutes = require("./Modules/map/mapRoutes");
+const trackRoutes = require("./Modules/track/trackRoutes");
+const adminRoutes = require("./Modules/admin/adminRoutes");
 
 router.use("/products", productRoutes);
 router.use("/map", mapRoutes);
@@ -15,6 +17,8 @@ router.use("/payments", paymentRoutes);
 router.use("/categories", categoryRoutes);
 router.use("/stats", statsRoutes);
 router.use("/home", homeRoutes);
+router.use("/track", trackRoutes);
+router.use("/admin", adminRoutes);
 
 router.get("/proxy-image", async (req, res) => {
   try {

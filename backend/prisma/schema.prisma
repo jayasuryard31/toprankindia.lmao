@@ -98,6 +98,27 @@ model ProductClick {
   @@map("product_clicks")
 }
 
+// One row per page view / product click, used purely for the admin traffic
+// dashboard (country breakdown, referrer sources, brand-level traffic).
+// `country` is resolved server-side from the request IP via an offline
+// geoip database — the IP itself is never sent to a third party.
+model VisitEvent {
+  id        String   @id @default(cuid())
+  path      String   @default("/")
+  productId String?  @map("product_id")
+  ip        String   @default("")
+  country   String   @default("XX") // ISO 3166-1 alpha-2, "XX" = unresolved
+  city      String   @default("")
+  referrer  String   @default("")
+  userAgent String   @default("") @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([country])
+  @@index([productId])
+  @@map("visit_events")
+}
+
 model Billboard {
   id              String    @id @default(cuid())
   billboardNumber Int       @unique @map("billboard_number")

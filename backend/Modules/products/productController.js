@@ -1,5 +1,6 @@
 const productService = require("./productService");
 const ApiResponse = require("../../Globals/ApiResponse");
+const { logVisit } = require("../../Utils/geoTrack");
 
 async function getProducts(req, res) {
   try {
@@ -44,6 +45,9 @@ async function trackClick(req, res) {
   try {
     const product = await productService.trackClick(req.params.id);
     if (!product) return res.json(ApiResponse.result("NOT_FOUND"));
+    // Fire-and-forget: never let analytics logging delay or fail the response
+    // the user is actually waiting on.
+    logVisit({ req, path: `/products/${req.params.id}/click`, productId: req.params.id });
     return res.json(ApiResponse.result("SUCCESS", { clickCount: product.clickCount }));
   } catch (err) {
     console.error("[Products] Click error:", err);
