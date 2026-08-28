@@ -19,6 +19,8 @@ const CATEGORIES = {
   18: { id: 18, name: "Gaming, VR & Metaverse" },
   19: { id: 19, name: "Mobile & App Ecosystems" },
   20: { id: 20, name: "Startups & Future Innovations" },
+  17: { id: 17, name: "Mobile & App Ecosystems" },
+  18: { id: 18, name: "Startups & Future Innovations" },
 };
 
 const PAYMENT_STATUS = {
