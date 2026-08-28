@@ -33,11 +33,97 @@ function createNameTag(label) {
   return sprite;
 }
 
+function createSpeechBubble(text) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 384;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+
+  // Speech bubble body with tail
+  ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
+  ctx.beginPath();
+  ctx.roundRect(16, 12, 352, 80, 24);
+  ctx.fill();
+  ctx.strokeStyle = "#38bdf8";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Little downward speech triangle/pointer
+  ctx.beginPath();
+  ctx.moveTo(180, 92);
+  ctx.lineTo(192, 114);
+  ctx.lineTo(204, 92);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
+  ctx.fill();
+  ctx.strokeStyle = "#38bdf8";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Text inside bubble
+  ctx.fillStyle = "#f8fafc";
+  ctx.font = "bold 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const display = text.length > 26 ? text.slice(0, 24) + "…" : text;
+  ctx.fillText(`💬 ${display}`, 192, 52);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(2.4, 0.8, 1);
+  sprite.position.y = 2.45;
+  sprite.renderOrder = 1000;
+  return sprite;
+}
+
 export class RemotePlayerPool {
   constructor(engine) {
     this.engine = engine;
-    this.players = new Map(); // id -> { id, color, char, targetPos, currentPos, targetYaw, currentYaw, animState, speed, tag, disposed }
+    this.players = new Map(); // id -> { id, color, char, targetPos, currentPos, targetYaw, currentYaw, animState, speed, tag, bubble, bubbleTimer, disposed }
     this._disposed = false;
+  }
+
+  getNearestPlayer(pos, maxDist = 8.5) {
+    if (!pos) return null;
+    let closest = null;
+    let closestDist = maxDist;
+    for (const [id, entry] of this.players.entries()) {
+      if (entry.disposed || !entry.char) continue;
+      const d = pos.distanceTo(entry.currentPos);
+      if (d < closestDist) {
+        closestDist = d;
+        const shortId = id.startsWith("p_") ? id.slice(2, 6).toUpperCase() : id.slice(0, 4);
+        closest = {
+          id,
+          name: `Player #${shortId}`,
+          shortId,
+          color: entry.color,
+          pos: entry.currentPos,
+          distance: d,
+        };
+      }
+    }
+    return closest;
+  }
+
+  showSpeechBubble(id, text) {
+    const entry = this.players.get(id);
+    if (!entry || !entry.char || entry.disposed) return;
+
+    if (entry.bubble) {
+      entry.char.group.remove(entry.bubble);
+      entry.bubble.material.map?.dispose?.();
+      entry.bubble.material.dispose?.();
+      entry.bubble = null;
+    }
+
+    const bubble = createSpeechBubble(text);
+    entry.char.group.add(bubble);
+    entry.bubble = bubble;
+    entry.bubbleTimer = 5.0; // 5s duration
   }
 
   async spawn(player) {
@@ -153,8 +239,6 @@ export class RemotePlayerPool {
         entry.fallTimer = 0;
       }
 
-      const isEmote = entry.animState && entry.animState !== "idle" && entry.animState !== "walk" && entry.animState !== "run" && entry.animState !== "sprint" && entry.animState !== "jump" && entry.animState !== "crouch" && entry.animState !== "fall";
-
       entry.char.update(dt, {
         state: isEmote ? "idle" : (entry.animState || "idle"),
         emote: isEmote ? entry.animState : null,
@@ -162,6 +246,17 @@ export class RemotePlayerPool {
         speed: entry.speed || 0,
         grounded: true,
       });
+
+      // 4. Update speech bubble expiration
+      if (entry.bubble) {
+        entry.bubbleTimer = (entry.bubbleTimer || 0) - dt;
+        if (entry.bubbleTimer <= 0) {
+          entry.char.group.remove(entry.bubble);
+          entry.bubble.material.map?.dispose?.();
+          entry.bubble.material.dispose?.();
+          entry.bubble = null;
+        }
+      }
     }
   }
 

@@ -591,9 +591,13 @@ function buildLandmarkStack(engine, group, rect, bank) {
 
   const shaft = new THREE.Mesh(
     new THREE.BoxGeometry(LANDMARK_W, 120, 3),
-    new THREE.MeshStandardMaterial({ color: 0x0b0e13, roughness: 0.55, metalness: 0.6 })
+    new THREE.MeshStandardMaterial({
+      color: atmo.dark ? 0x1e293b : 0x334155,
+      roughness: 0.35,
+      metalness: 0.75,
+    })
   );
-  shaft.position.set(x, 62, z - 1.6);
+  shaft.position.set(x, 62, z + 0.8);
   shaft.rotation.y = Math.PI;
   shaft.castShadow = true;
   group.add(shaft);

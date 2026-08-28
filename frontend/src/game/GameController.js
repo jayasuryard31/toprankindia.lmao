@@ -118,6 +118,12 @@ export class GameController {
     this.mp.on("state", (id, state) => {
       this.remotePool.updateState(id, state);
     });
+    this.mp.on("chat", (msg) => {
+      if (msg && msg.from) {
+        this.remotePool.showSpeechBubble(msg.from, msg.text);
+        this.onChat?.(msg);
+      }
+    });
 
     // dress undeveloped lots
     this.vacant = buildVacantPlots(engine, { max: 90 });
@@ -215,12 +221,13 @@ export class GameController {
 
     this.cam.update(dt, cs.pos, { sprint: Boolean(this.input.sprint || this.input.run) });
 
-    // interaction + locate at a lower cadence
+    // interaction + locate + proximity peer scanning at a lower cadence
     this._scanAcc = (this._scanAcc || 0) + dt;
     if (this._scanAcc > 0.12) {
       this._scanAcc = 0;
       this._interactable = this.interaction.scan(cs.pos);
       this._locate = this.interaction.locate(cs.pos);
+      this._nearbyPlayer = this.remotePool ? this.remotePool.getNearestPlayer(cs.pos, 8.5) : null;
       this._emit();
     }
   }
@@ -233,6 +240,79 @@ export class GameController {
     if (this.phase !== "playing" || !this.player) return null;
     this._interactable = this.interaction.scan(this.player.pos);
     return this._interactable;
+  }
+
+  /** Get the currently nearby player (within 8.5m) for proximity chat. */
+  getNearbyPlayer() {
+    if (this.phase !== "playing" || !this.player || !this.remotePool) return null;
+    return this.remotePool.getNearestPlayer(this.player.pos, 8.5);
+  }
+
+  /** Send temporary proximity chat message to live players (not saved in DB). */
+  sendChat(text, to = null) {
+    if (!this.mp) return;
+    this.mp.sendChat(text, to);
+    this._showLocalBubble(text);
+  }
+
+  _showLocalBubble(text) {
+    if (!this.char || !this.char.group) return;
+    if (this._localBubble) {
+      this.char.group.remove(this._localBubble);
+      this._localBubble.material?.map?.dispose?.();
+      this._localBubble.material?.dispose?.();
+      this._localBubble = null;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 384;
+    canvas.height = 128;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
+    ctx.beginPath();
+    ctx.roundRect(16, 12, 352, 80, 24);
+    ctx.fill();
+    ctx.strokeStyle = "#f05a38";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(180, 92);
+    ctx.lineTo(192, 114);
+    ctx.lineTo(204, 92);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
+    ctx.fill();
+    ctx.strokeStyle = "#f05a38";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.fillStyle = "#f8fafc";
+    ctx.font = "bold 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const display = text.length > 26 ? text.slice(0, 24) + "…" : text;
+    ctx.fillText(`💬 ${display}`, 192, 52);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(2.4, 0.8, 1);
+    sprite.position.y = 2.45;
+    sprite.renderOrder = 1000;
+    this.char.group.add(sprite);
+    this._localBubble = sprite;
+
+    if (this._localBubbleTimer) clearTimeout(this._localBubbleTimer);
+    this._localBubbleTimer = setTimeout(() => {
+      if (this._localBubble && this.char) {
+        this.char.group.remove(this._localBubble);
+        this._localBubble.material?.map?.dispose?.();
+        this._localBubble.material?.dispose?.();
+        this._localBubble = null;
+      }
+    }, 5000);
   }
 
   /** Screen anchor just above the player's head, for in-world panels. */
@@ -259,6 +339,7 @@ export class GameController {
       this.cam.snap(this.player.pos);
       this._interactable = this.interaction.scan(this.player.pos);
       this._locate = this.interaction.locate(this.player.pos);
+      this._nearbyPlayer = this.remotePool ? this.remotePool.getNearestPlayer(this.player.pos, 8.5) : null;
       this._emit();
     }
   }
@@ -324,11 +405,13 @@ export class GameController {
     this.onState({
       phase: this.phase,
       interactable: this._interactable,
+      nearbyPlayer: this._nearbyPlayer,
       locate: this._locate,
       player: this.player ? this.player.pos : null,
       headAnchor: this.getHeadAnchor(),
       camYaw: this.cam ? this.cam.yaw : 0,
       online: this.onlineCount,
+      myId: this.mp?.id,
     });
   }
 }

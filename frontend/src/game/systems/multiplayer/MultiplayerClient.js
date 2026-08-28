@@ -155,12 +155,32 @@ export class MultiplayerClient {
         }
         break;
 
+      case "chat":
+        this._emit("chat", msg);
+        break;
+
       case "pong":
         break;
 
       default:
         break;
     }
+  }
+
+  sendChat(text, to = null) {
+    if (this._disposed || !this._ws || this._ws.readyState !== WebSocket.OPEN) return;
+    const cleanText = String(text || "").trim().slice(0, 300);
+    if (!cleanText) return;
+    try {
+      this._ws.send(
+        JSON.stringify({
+          type: "chat",
+          text: cleanText,
+          to: to || null,
+          senderName: this.name || (this.id ? `Player #${this.id.slice(2, 6).toUpperCase()}` : "Player"),
+        })
+      );
+    } catch (_) {}
   }
 
   _startHeartbeat() {

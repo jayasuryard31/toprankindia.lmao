@@ -128,6 +128,21 @@ function setupGameSocket(server) {
             },
             id
           );
+        } else if (msg.type === "chat") {
+          // Ephemeral temporary proximity chat between live players (NOT stored in database)
+          const text = String(msg.text || "").trim().slice(0, 300);
+          if (text) {
+            broadcast({
+              type: "chat",
+              from: id,
+              to: msg.to || null,
+              senderName: msg.senderName || `Player #${id.slice(2, 6).toUpperCase()}`,
+              color: playerData.color,
+              text,
+              pos: playerData.pos,
+              timestamp: Date.now(),
+            });
+          }
         } else if (msg.type === "ping") {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: "pong" }));

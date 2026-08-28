@@ -4,6 +4,7 @@ import GameHUD from "./GameHUD";
 import LandmarkPrompt from "./LandmarkPrompt";
 import PlotBidPopup from "../../components/city/PlotBidPopup";
 import BillboardBookingPopup from "../../components/city/BillboardBookingPopup";
+import ProximityChatModal from "./ProximityChatModal";
 import TouchControls from "./TouchControls";
 
 const KEYMAP = {
@@ -17,16 +18,18 @@ const KEYMAP = {
 
 /**
  * React host for the in-city third-person mode. Owns the GameController
- * lifecycle, keyboard/mouse capture, pointer lock and the minimal HUD.
+ * lifecycle, keyboard/mouse capture, pointer lock, HUD and proximity chat.
  */
 export default function GameMode({ engine, onExit, onOutbidSuccess }) {
   const ctrlRef = useRef(null);
   const playerRef = useRef(null);
   const camYawRef = useRef(0);
-  const [state, setState] = useState({ phase: "cinematic", interactable: null, locate: {} });
+  const [state, setState] = useState({ phase: "cinematic", interactable: null, locate: {}, nearbyPlayer: null });
   const [detail, setDetail] = useState(null); // landmark detail panel
   const [plot, setPlot] = useState(null); // vacant-plot bid popup
   const [booking, setBooking] = useState(null); // billboard booking form
+  const [chatPlayer, setChatPlayer] = useState(null); // live proximity chat session
+  const [chatMessages, setChatMessages] = useState([]);
   const [locked, setLocked] = useState(false);
 
   const onCtrlState = useCallback((s) => {
@@ -56,6 +59,19 @@ export default function GameMode({ engine, onExit, onOutbidSuccess }) {
     ctrlRef.current = ctrl;
     let alive = true;
 
+    ctrl.onChat = (msg) => {
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          isMe: false,
+          from: msg.from,
+          senderName: msg.senderName,
+          text: msg.text,
+          timestamp: msg.timestamp || Date.now(),
+        },
+      ]);
+    };
+
     ctrl.enter().then(() => {
       if (!alive) return;
       engine.setGameHook((dt) => ctrl.update(dt));
@@ -64,6 +80,7 @@ export default function GameMode({ engine, onExit, onOutbidSuccess }) {
     return () => {
       alive = false;
       ctrl.onState = () => {};
+      ctrl.onChat = null;
       engine.setGameHook(null);
       ctrl.dispose(); // synchronous teardown - safe under StrictMode double-mount
       if (ctrlRef.current === ctrl) ctrlRef.current = null;
@@ -72,19 +89,54 @@ export default function GameMode({ engine, onExit, onOutbidSuccess }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine]);
 
+  const openChat = useCallback((target = null) => {
+    const targetP = target || state.nearbyPlayer || ctrlRef.current?.getNearbyPlayer();
+    if (!targetP) return;
+    if (document.pointerLockElement) document.exitPointerLock();
+    setChatPlayer(targetP);
+  }, [state.nearbyPlayer]);
+
+  const handleSendChat = useCallback((text) => {
+    if (!ctrlRef.current) return;
+    ctrlRef.current.sendChat(text, chatPlayer?.id);
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        isMe: true,
+        text,
+        senderName: "You",
+        timestamp: Date.now(),
+      },
+    ]);
+  }, [chatPlayer]);
+
   // ── keyboard ─────────────────────────────────────────────────────
   useEffect(() => {
     const ctrl = () => ctrlRef.current;
     const down = (e) => {
       if (e.repeat) return;
+
+      // Allow free typing without triggering character motion if an input is focused
+      if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") {
+        if (e.code === "Escape") {
+          setChatPlayer(null);
+        }
+        return;
+      }
+
       if (e.code === "Escape") {
-        if (detail || plot || booking) {
+        if (chatPlayer || detail || plot || booking) {
+          setChatPlayer(null);
           setDetail(null);
           setPlot(null);
           setBooking(null);
         } else {
           handleExit();
         }
+        return;
+      }
+      if (e.code === "KeyM") {
+        openChat();
         return;
       }
       if (e.code === "Space") {
@@ -110,6 +162,7 @@ export default function GameMode({ engine, onExit, onOutbidSuccess }) {
       }
     };
     const up = (e) => {
+      if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
       if (e.code === "Space") {
         ctrl()?.setInput({ jumpHeld: false });
         return;
@@ -147,7 +200,7 @@ export default function GameMode({ engine, onExit, onOutbidSuccess }) {
       document.removeEventListener("visibilitychange", clearInput);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detail, plot, booking]);
+  }, [detail, plot, booking, chatPlayer, openChat]);
 
   // ── pointer lock + mouse look ────────────────────────────────────
   useEffect(() => {
@@ -155,7 +208,7 @@ export default function GameMode({ engine, onExit, onOutbidSuccess }) {
     if (isTouch) return undefined; // touch devices use TouchControls, not pointer lock
     const dom = engine.renderer.domElement;
     const onClick = () => {
-      if (!detail && !plot && state.phase === "playing" && !document.pointerLockElement) {
+      if (!detail && !plot && !chatPlayer && state.phase === "playing" && !document.pointerLockElement) {
         dom.requestPointerLock?.();
       }
     };
@@ -171,7 +224,7 @@ export default function GameMode({ engine, onExit, onOutbidSuccess }) {
       document.removeEventListener("pointerlockchange", onLockChange);
       document.removeEventListener("mousemove", onMove);
     };
-  }, [engine, detail, plot, state.phase, isTouch]);
+  }, [engine, detail, plot, chatPlayer, state.phase, isTouch]);
 
   function openInteraction() {
     const it = ctrlRef.current?.interact();
@@ -214,6 +267,8 @@ export default function GameMode({ engine, onExit, onOutbidSuccess }) {
           <GameHUD
             locate={state.locate}
             interactable={state.interactable}
+            nearbyPlayer={state.nearbyPlayer}
+            onOpenChat={() => openChat()}
             locked={locked}
             onExit={handleExit}
             engine={engine}
@@ -222,7 +277,7 @@ export default function GameMode({ engine, onExit, onOutbidSuccess }) {
             online={state.online || 1}
             isTouch={isTouch}
           />
-          {isTouch && !detail && !plot && !booking && (
+          {isTouch && !detail && !plot && !booking && !chatPlayer && (
             <TouchControls
               onInput={handleTouchInput}
               onLook={handleTouchLook}
@@ -232,6 +287,16 @@ export default function GameMode({ engine, onExit, onOutbidSuccess }) {
             />
           )}
         </>
+      )}
+
+      {chatPlayer && (
+        <ProximityChatModal
+          targetPlayer={chatPlayer}
+          messages={chatMessages}
+          onSendMessage={handleSendChat}
+          onClose={() => setChatPlayer(null)}
+          screenPos={centerPos}
+        />
       )}
 
       {detail && (

@@ -9,6 +9,8 @@ import { formatINR } from "../../utils/formatINR";
 export default function GameHUD({
   locate = {},
   interactable,
+  nearbyPlayer,
+  onOpenChat,
   locked,
   onExit,
   engine,
@@ -68,15 +70,50 @@ export default function GameHUD({
         </button>
       </div>
 
-      {/* BOTTOM-LEFT - keyboard hints (desktop only; touch has its own stick) */}
+      {/* BOTTOM-LEFT - keyboard hints */}
       {!isTouch && (
         <div className="absolute bottom-5 left-5 pointer-events-none select-none">
           <div className="px-3 py-2 rounded-xl bg-black/25 backdrop-blur-md border border-white/10 text-[11px] text-white/70 font-mono leading-relaxed">
             <span className="text-white/90">WASD</span> move · <span className="text-white/90">Shift</span> run ·{" "}
             <span className="text-white/90">Space</span> jump · <span className="text-white/90">C</span> crouch ·{" "}
-            <span className="text-white/90">E</span> interact · <span className="text-white/90">O</span> emote
+            <span className="text-white/90">E</span> interact · <span className="text-sky-300 font-bold">M</span> chat ·{" "}
+            <span className="text-white/90">O</span> emote
             {!locked && <div className="text-white/45 mt-0.5">click the view to capture the mouse</div>}
           </div>
+        </div>
+      )}
+
+      {/* Proximity Player Chat prompt */}
+      {nearbyPlayer && (
+        <div
+          className={`absolute left-1/2 -translate-x-1/2 pointer-events-auto select-none ${
+            isTouch ? "top-[18%] w-[min(20rem,88vw)]" : "bottom-[26vh]"
+          }`}
+        >
+          <button
+            onClick={onOpenChat}
+            className="w-full px-4 py-2 rounded-2xl bg-slate-900/85 hover:bg-slate-900 active:scale-95 backdrop-blur-md border border-sky-400/60 shadow-xl text-white text-center animate-in fade-in slide-in-from-bottom-2 duration-150 cursor-pointer flex items-center justify-between gap-3 group"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className="w-2.5 h-2.5 rounded-full animate-ping flex-shrink-0"
+                style={{ backgroundColor: nearbyPlayer.color ? `#${nearbyPlayer.color.toString(16).padStart(6, "0")}` : "#38bdf8" }}
+              />
+              <div className="text-left">
+                <div className="text-[10px] text-sky-300 font-bold uppercase tracking-wider">
+                  Nearby Player Detected
+                </div>
+                <div className="text-xs font-bold text-white">
+                  {nearbyPlayer.name} ({nearbyPlayer.distance.toFixed(1)}m)
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs font-bold text-sky-300 bg-sky-500/20 px-2.5 py-1 rounded-xl border border-sky-400/30 group-hover:bg-sky-500/30">
+              {!isTouch && <kbd className="px-1.5 py-0.5 rounded bg-white/20 font-mono text-[10px] text-white">M</kbd>}
+              <span>{isTouch ? "Chat 💬" : "Press M to Chat 💬"}</span>
+            </div>
+          </button>
         </div>
       )}
 
@@ -114,9 +151,11 @@ export default function GameHUD({
             ) : interactable.type === "billboard" ? (
               <>
                 <div className="text-[10px] uppercase tracking-[0.2em] text-amber-300 font-bold">
-                  ★ Sponsored Billboard · {interactable.fixedCost || "₹50,000 / mo"}
+                  ★ {interactable.isOccupied ? "Sponsored Billboard" : "Available Ad Space"} · {interactable.fixedCost || "$20 / mo"}
                 </div>
-                <div className="text-base font-black tracking-wide">{interactable.brand}</div>
+                <div className="text-base font-black tracking-wide">
+                  {interactable.isOccupied ? interactable.brand : `Billboard #${interactable.billboardNumber}`}
+                </div>
                 <div className="text-xs text-white/70 font-mono">{interactable.billboardName}</div>
               </>
             ) : (
@@ -141,9 +180,11 @@ export default function GameHUD({
                 {isTouch && <span className="font-bold">E</span>}
                 {isTouch ? " to " : ""}
                 {interactable.type === "landmark"
-                  ? isTouch ? "view brand" : "View brand"
+                  ? isTouch ? "view brand" : "View Brand HQ"
                   : interactable.type === "billboard"
-                  ? isTouch ? "view sponsor ad" : "View sponsor ad"
+                  ? interactable.isOccupied
+                    ? isTouch ? "visit website" : "Visit Website ↗"
+                    : isTouch ? "buy billboard" : "Buy Billboard Space ($)"
                   : interactable.prebuilt
                   ? isTouch ? "buy this building" : "Buy this building"
                   : isTouch ? "claim this plot" : "Claim this plot"}

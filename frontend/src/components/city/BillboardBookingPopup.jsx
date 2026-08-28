@@ -188,14 +188,30 @@ export default function BillboardBookingPopup({ billboard, screenPos, onClose, o
   );
   const occupiedBrand = billboard?.brandName || billboard?.product?.websiteName || billboard?.brand || "Another Brand";
 
+  const winW = typeof window !== "undefined" ? window.innerWidth : 1200;
+  const winH = typeof window !== "undefined" ? window.innerHeight : 800;
+  const rawX = screenPos?.x ?? winW / 2;
+  const rawY = screenPos?.y ?? winH / 2;
+
+  const popupWidth = 350;
+  const halfW = popupWidth / 2;
+  const estimatedH = 460;
+
+  // Clamp horizontally within screen margins
+  const posX = Math.max(halfW + 16, Math.min(winW - halfW - 16, rawX));
+
+  // Shift upwards so the card sits comfortably in the upper-center of the screen
+  const posY = Math.max(76, Math.min(winH - estimatedH - 24, rawY - 260));
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200 pointer-events-auto"
-      onClick={onClose}
-    >
+    <>
+      {/* Light click-away backdrop */}
+      <div className="fixed inset-0 z-30 pointer-events-auto" onClick={onClose} />
+
       <div
+        style={{ left: `${posX}px`, top: `${posY}px` }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-md max-h-[90vh] overflow-y-auto glass-panel p-5 sm:p-6 rounded-3xl shadow-2xl border border-amber-400/40 text-xs animate-in zoom-in-95 duration-200"
+        className="fixed -translate-x-1/2 z-40 w-84 sm:w-92 max-w-[calc(100vw-24px)] max-h-[calc(100vh-88px)] overflow-y-auto glass-panel p-4 sm:p-5 rounded-3xl shadow-2xl border border-amber-400/50 text-xs animate-in fade-in zoom-in-95 duration-200 pointer-events-auto"
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
@@ -339,7 +355,7 @@ export default function BillboardBookingPopup({ billboard, screenPos, onClose, o
         </button>
       </form>
     </div>
-  </div>
+  </>
   );
 }
 
