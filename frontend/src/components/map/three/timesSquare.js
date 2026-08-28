@@ -93,110 +93,117 @@ function makeAdTexture(shape, seed) {
 
   // ── ground ──────────────────────────────────────────────────────────
   if (style === 0) {
-    // saturated full-bleed colour field
+    // Saturated full-bleed neon color gradient
     const gr = ctx.createLinearGradient(0, 0, W, H);
     gr.addColorStop(0, accent);
     gr.addColorStop(1, pick(AD_COLORS));
     ctx.fillStyle = gr;
     ctx.fillRect(0, 0, W, H);
   } else if (style === 1) {
-    // dark screen with a neon wordmark
-    ctx.fillStyle = "#07090f";
+    // Cyber deep navy/indigo with vibrant neon glow
+    const gr = ctx.createLinearGradient(0, 0, W, H);
+    gr.addColorStop(0, "#0a1226");
+    gr.addColorStop(0.5, "#141e38");
+    gr.addColorStop(1, "#1a163a");
+    ctx.fillStyle = gr;
     ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 6;
+    ctx.strokeRect(12, 12, W - 24, H - 24);
   } else if (style === 2) {
-    // split panel: colour block beside a dark half
-    ctx.fillStyle = "#0b1017";
+    // Split panel: color block beside high-tech dark half
+    ctx.fillStyle = "#0c1527";
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = accent;
     if (shape === "tall") ctx.fillRect(0, 0, W, H * 0.46);
-    else ctx.fillRect(0, 0, W * 0.42, H);
+    else ctx.fillRect(0, 0, W * 0.44, H);
   } else if (style === 3) {
-    // white poster
-    ctx.fillStyle = "#f5f3ee";
+    // Modern bold yellow / cyan high-energy billboard
+    const gr = ctx.createLinearGradient(0, 0, W, 0);
+    gr.addColorStop(0, "#0284c7");
+    gr.addColorStop(1, "#0369a1");
+    ctx.fillStyle = gr;
     ctx.fillRect(0, 0, W, H);
   } else {
-    // photo-ish abstract: soft blobs over a deep ground
-    ctx.fillStyle = "#101725";
+    // Photo-ish abstract: colorful glowing cosmic gradients
+    ctx.fillStyle = "#0b1329";
     ctx.fillRect(0, 0, W, H);
     for (let i = 0; i < 7; i++) {
       const gx = r() * W;
       const gy = r() * H;
-      const rad = (0.2 + r() * 0.5) * Math.max(W, H) * 0.5;
+      const rad = (0.3 + r() * 0.5) * Math.max(W, H) * 0.5;
       const gr = ctx.createRadialGradient(gx, gy, 0, gx, gy, rad);
-      gr.addColorStop(0, `${pick(AD_COLORS)}cc`);
+      gr.addColorStop(0, `${pick(AD_COLORS)}dd`);
       gr.addColorStop(1, "#00000000");
       ctx.fillStyle = gr;
       ctx.fillRect(0, 0, W, H);
     }
   }
 
-  // faint LED pixel grid over everything - these are screens, not posters
-  ctx.strokeStyle = "rgba(0,0,0,0.10)";
+  // Faint LED pixel grid
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
   ctx.lineWidth = 1;
-  for (let x = 0; x < W; x += 8) {
+  for (let x = 0; x < W; x += 16) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, H);
     ctx.stroke();
   }
-  for (let y = 0; y < H; y += 8) {
+  for (let y = 0; y < H; y += 16) {
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(W, y);
     ctx.stroke();
   }
 
-  const ink = style === 3 ? "#14171c" : "#ffffff";
-  const sub = style === 3 ? "rgba(20,23,28,0.65)" : "rgba(255,255,255,0.72)";
+  const ink = "#ffffff";
+  const sub = "rgba(255,255,255,0.88)";
 
   // ── lettering ───────────────────────────────────────────────────────
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
   if (shape === "tall") {
-    // Vertical banners set the name huge and stacked, the way a real
-    // building-height banner has to be read from the street below.
+    // Vertical banners set the name huge and stacked
     ctx.fillStyle = ink;
     const chars = brand.split("");
     const step = Math.min(120, (H * 0.62) / chars.length);
     ctx.font = `900 ${Math.round(step * 0.92)}px 'Inter', Impact, sans-serif`;
     chars.forEach((c, i) => {
-      ctx.fillText(c, W / 2, H * 0.3 + i * step);
+      ctx.fillText(c, W / 2, H * 0.28 + i * step);
     });
     ctx.fillStyle = sub;
-    ctx.font = "600 40px 'Inter', sans-serif";
-    ctx.fillText(pick(TAGLINES), W / 2, H - 78);
-    if (style === 1) {
-      ctx.strokeStyle = accent;
-      ctx.lineWidth = 8;
-      ctx.strokeRect(28, 28, W - 56, H - 56);
-    }
+    ctx.font = "700 40px 'Inter', sans-serif";
+    ctx.fillText(pick(TAGLINES), W / 2, H - 80);
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 6;
+    ctx.strokeRect(16, 16, W - 32, H - 32);
   } else if (shape === "ribbon") {
-    // Ribbon boards run one line of text, repeated, like a news crawl.
+    // Ribbon boards run one line of text, repeated
     ctx.fillStyle = ink;
-    ctx.font = "900 132px 'Inter', Impact, sans-serif";
-    const line = `${brand}   ★   ${pick(TAGLINES)}   ★   `;
+    ctx.font = "900 128px 'Inter', Impact, sans-serif";
+    const line = `${brand}   ★   ${pick(TAGLINES)}   ★   TIMES SQUARE LIVE   ★   `;
     const tw = ctx.measureText(line).width;
     for (let x = 0; x < W + tw; x += tw) ctx.fillText(line, x - tw / 2, H / 2);
   } else if (shape === "shop") {
-    ctx.fillStyle = style === 3 ? "#14171c" : accent;
+    ctx.fillStyle = accent;
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = style === 3 ? "#f5f3ee" : "#0b1017";
-    ctx.font = "900 118px 'Inter', Impact, sans-serif";
-    ctx.fillText(`${brand}  ${pick(SHOP_KINDS)}`, W / 2, H / 2 + 6);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 114px 'Inter', Impact, sans-serif";
+    ctx.fillText(`${brand}  ${pick(SHOP_KINDS)}`, W / 2, H / 2 + 4);
   } else {
-    // Wide marquee: a big wordmark over a supporting line.
+    // Wide marquee: big wordmark over supporting line + buy CTA
     ctx.fillStyle = ink;
-    ctx.font = "900 168px 'Inter', Impact, sans-serif";
-    ctx.fillText(brand, W / 2, H * 0.42);
+    ctx.font = "900 160px 'Inter', Impact, sans-serif";
+    ctx.fillText(brand, W / 2, H * 0.40);
     ctx.fillStyle = sub;
-    ctx.font = "700 62px 'Inter', sans-serif";
-    ctx.fillText(pick(TAGLINES), W / 2, H * 0.72);
-    if (style === 1) {
-      ctx.strokeStyle = accent;
-      ctx.lineWidth = 10;
-      ctx.strokeRect(30, 30, W - 60, H - 60);
-    }
+    ctx.font = "700 58px 'Inter', sans-serif";
+    ctx.fillText(pick(TAGLINES), W / 2, H * 0.70);
+
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 8;
+    ctx.strokeRect(20, 20, W - 40, H - 40);
   }
 
   return finishTex(cv);
@@ -220,13 +227,8 @@ function makeAdBank() {
 /**
  * The four building walls that box the crossing, as parametric lines.
  *
- * `along(t)` walks the wall from one end to the other (t in 0..1) and returns
- * a world position; `yaw` turns a panel to face into the square; `normal` is
- * the small outward offset that keeps a panel proud of the brickwork.
- *
- * Offsets come from the grid: the square's rect edges are the CENTRES of the
- * roads that box it, so the wall is half a road plus the lot setback away -
- * 16 on the narrow streets (north/south), 20 on the wide avenues (east/west).
+ * `out` points OUTWARD from the building wall into the square, ensuring
+ * panels stand proud of the brickwork without clipping.
  */
 function frontages(rect) {
   const { x0, x1, z0, z1, cx, cz } = rect;
@@ -240,28 +242,28 @@ function frontages(rect) {
       yaw: 0, // screen faces +Z, into the square
       at: (t) => ({ x: x0 + t * spanX, z: z0 - N }),
       len: spanX,
-      out: { x: 0, z: -1 },
+      out: { x: 0, z: 1 }, // points +Z into the square
     },
     {
       id: "south",
-      yaw: Math.PI,
+      yaw: Math.PI, // screen faces -Z, into the square
       at: (t) => ({ x: x0 + t * spanX, z: z1 + N }),
       len: spanX,
-      out: { x: 0, z: 1 },
+      out: { x: 0, z: -1 }, // points -Z into the square
     },
     {
       id: "east",
-      yaw: -Math.PI / 2,
+      yaw: -Math.PI / 2, // screen faces -X, into the square
       at: (t) => ({ x: x1 + A, z: z0 + t * spanZ }),
       len: spanZ,
-      out: { x: 1, z: 0 },
+      out: { x: -1, z: 0 }, // points -X into the square
     },
     {
       id: "west",
-      yaw: Math.PI / 2,
+      yaw: Math.PI / 2, // screen faces +X, into the square
       at: (t) => ({ x: x0 - A, z: z0 + t * spanZ }),
       len: spanZ,
-      out: { x: -1, z: 0 },
+      out: { x: 1, z: 0 }, // points +X into the square
     },
   ].map((f) => ({ ...f, cx, cz }));
 }
@@ -540,7 +542,7 @@ function buildShopFronts(engine, group, rect, bank) {
     new THREE.MeshStandardMaterial({
       color: 0xffe9c4,
       emissive: new THREE.Color(0xffd79a),
-      emissiveIntensity: atmo.dark ? 0.95 : 0.18,
+      emissiveIntensity: atmo.dark ? 0.95 : 0.45,
       roughness: 0.18,
       metalness: 0.1,
       side: THREE.DoubleSide,
@@ -555,8 +557,8 @@ function buildShopFronts(engine, group, rect, bank) {
         map: tex,
         emissiveMap: tex,
         emissive: new THREE.Color(0xffffff),
-        emissiveIntensity: atmo.dark ? 0.7 : 0.22,
-        roughness: 0.5,
+        emissiveIntensity: 1.0,
+        roughness: 0.3,
         side: THREE.DoubleSide,
       })
     ));
@@ -583,9 +585,6 @@ function buildShopFronts(engine, group, rect, bank) {
  * so it needs no lot of its own.
  */
 function buildLandmarkStack(engine, group, rect, bank) {
-  // Set east of the avenue mouth: a 20m slab centred on the avenue itself
-  // would hang over the open roadway with no building behind it, and the three
-  // bookable south screens already own the wall either side of centre.
   const x = rect.cx + LANDMARK_X_OFFSET;
   const z = rect.z1 + 16; // the south frontage wall line
   const atmo = engine.atmo;
@@ -613,13 +612,16 @@ function buildLandmarkStack(engine, group, rect, bank) {
         emissiveMap: tex,
         emissive: new THREE.Color(0xffffff),
         emissiveIntensity: SIGN_LIGHT.screen,
-        roughness: 0.35,
+        roughness: 0.18,
+        side: THREE.DoubleSide,
       })
     );
-    panel.position.set(x, y + h / 2, z + 0.2);
+    panel.position.set(x, y + h / 2, z - 0.2);
     panel.rotation.y = Math.PI;
     panel.userData.pulse = 0.6 + (i % 5) * 0.2;
     panel.userData.baseEmissive = SIGN_LIGHT.screen;
+    panel.userData.isTimesSquareScreen = true;
+    panel.userData.isBillboard = true;
     panels.push(panel);
     group.add(panel);
     y += h;

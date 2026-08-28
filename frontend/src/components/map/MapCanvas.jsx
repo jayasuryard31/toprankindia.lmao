@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ThreeCityEngine } from "./three/ThreeCityEngine";
 import DistrictOverlayCards from "./three/DistrictOverlayCards";
+import BrandBillboards from "./three/BrandBillboards";
 import { useTheme } from "../../context/ThemeContext";
 import { useMapStore } from "./useMapStore";
 import InMapBuildingPopup from "../city/InMapBuildingPopup";
@@ -29,6 +30,7 @@ export default function MapCanvas({
   const viewSwitchedRef = useRef(false);
 
   const [billboards, setBillboards] = useState([]);
+  const [cityBillboards, setCityBillboards] = useState([]);
   const [districtCards, setDistrictCards] = useState([]);
   const [selectedTower, setSelectedTower] = useState(null);
   const [popupPos, setPopupPos] = useState(null);
@@ -45,11 +47,17 @@ export default function MapCanvas({
     ? [...products].sort((a, b) => (b.currentAmount || 0) - (a.currentAmount || 0))[0]?.websiteName
     : null;
 
+  const setFps = useMapStore((s) => s.setFps);
+
   const updateProjectedOverlays = useCallback(() => {
     const engine = engineRef.current;
     if (!engine) return;
+    if (typeof engine._fps === "number") {
+      setFps(Math.round(engine._fps));
+    }
     const bList = engine.getProjectedTowerBillboards();
     setBillboards(bList);
+    setCityBillboards(engine.getProjectedCityBillboards());
     setDistrictCards(engine.getProjectedDistrictCards());
 
     if (selectedTower) {
@@ -234,8 +242,6 @@ export default function MapCanvas({
       {/* touch-none: the canvas owns its gestures (orbit / pinch / joystick) */}
       <div ref={containerRef} className="absolute inset-0 w-full h-full z-0 touch-none" />
 
-      {engineReady && <PerfHUD engine={engineRef.current} />}
-
       {/* Shutter blink covering the hard 3D↔2D cut */}
       {blink > 0 && (
         <div
@@ -294,6 +300,30 @@ export default function MapCanvas({
         onSelectDistrict={(distId) => engineRef.current?.focusDistrict(distId)}
       />
 
+      <BrandBillboards
+        billboards={billboards}
+        cityBillboards={cityBillboards}
+        onSelectProduct={(prod) => {
+          setSelectedTower(prod);
+          onSelectProduct?.(prod);
+          const towerMesh = engineRef.current?.brandTowersGroup.children.find(
+            (c) => c.userData?.product?.id === prod.id
+          );
+          if (towerMesh) engineRef.current?.focusTower(towerMesh);
+        }}
+        onSelectBillboard={(bbData) => {
+          const billboardMesh = engineRef.current?.brandBillboardsGroup?.children.find(
+            (c) => c.userData?.billboardDef?.id === bbData.id || c.userData?.billboardNumber === bbData.billboardNumber
+          );
+          if (billboardMesh) {
+            engineRef.current?.focusBillboard(billboardMesh);
+          } else {
+            setSelectedBillboard(bbData);
+            setBillboardPos({ x: bbData.screenX, y: bbData.screenY });
+          }
+        }}
+      />
+
       {selectedTower && popupPos && (
         <InMapBuildingPopup
           building={{
@@ -325,7 +355,7 @@ export default function MapCanvas({
         />
       )}
 
-      {selectedBillboard && billboardPos && (
+      {selectedBillboard && (
         <BillboardBookingPopup
           billboard={selectedBillboard}
           screenPos={billboardPos}

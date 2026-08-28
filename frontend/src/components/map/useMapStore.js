@@ -35,6 +35,7 @@ export const useMapStore = create((set) => ({
   // True while the player is walking the city in third person. The whole site
   // chrome (header nav, footer, map overlays) steps out of the way when set.
   inCity: false,
+  fps: 60,
 
   setSelectedDistrict: (id) => set({ selectedDistrict: id }),
   setHoveredDistrict: (id) => set({ hoveredDistrict: id }),
@@ -43,6 +44,7 @@ export const useMapStore = create((set) => ({
   setShowHeatmap: (v) => set({ showHeatmap: v }),
   setCamera: (camera) => set({ camera }),
   setInCity: (inCity) => set({ inCity }),
+  setFps: (fps) => set({ fps }),
   toggleViewMode: () => set((s) => ({ viewMode: s.viewMode === "2D" ? "3D" : "2D" })),
   setViewMode: (viewMode) => set({ viewMode }),
 

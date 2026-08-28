@@ -26,18 +26,27 @@ export class InteractionSystem {
       for (const b of this.engine.brandBillboardsGroup.children) {
         const u = b.userData;
         if (!u?.billboardDef && !u?.product) continue;
+        const maxRange = u.billboardDef?.anchor === "times" ? 28 : 20;
         const d = Math.hypot(b.position.x - px, b.position.z - pz);
-        if (d < 18 && d < bestD) {
+        if (d < maxRange && d < bestD) {
           bestD = d;
           best = {
             type: "billboard",
-            id: u.product?.id || u.billboardDef?.id || "bb_sponsor",
-            brand: u.brand || u.product?.websiteName || "Featured Sponsor",
+            id: u.billboardDef?.id || u.code || u.product?.id || "bb_sponsor",
+            code: u.code || u.billboardDef?.id,
+            billboardId: u.billboardId || u.billboardDef?.id,
+            billboardNumber: u.billboardNumber || u.billboardDef?.billboardNumber || 1,
+            billboardDef: u.billboardDef,
+            billboardRecord: u.billboardRecord,
+            isOccupied: Boolean(u.isOccupied),
+            isClaimed: Boolean(u.isOccupied),
+            brand: u.brand || u.product?.websiteName || "Available Ad Space",
             billboardName: u.billboardName || u.billboardDef?.name || "City Billboard",
             fixedCost: u.fixedCost || u.billboardDef?.costFormatted || "$20 / mo",
             costUSD: u.costUSD || u.billboardDef?.costUSD || 20,
+            rateUSD: u.rateUSD || u.costUSD || u.billboardDef?.costUSD || 20,
             rank: u.rank || 1,
-            color: u.color || "#F05A38",
+            color: u.color || (u.isOccupied ? "#10b981" : "#38bdf8"),
             product: u.product || {
               websiteName: u.brand || "Featured Brand Sponsor",
               websiteUrl: "https://toprankworld.lol",

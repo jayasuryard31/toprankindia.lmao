@@ -72,10 +72,10 @@ export function loadSafeFavicon(rawSources, onImageLoaded) {
  * into a white rectangle you could not actually read. `edge` only affects the
  * accent frame, which IS on the bloom layer and is what should glow.
  */
-export const SIGN_LIGHT = { screen: 0.3, edge: 0.5 };
+export const SIGN_LIGHT = { screen: 1.0, edge: 0.9 };
 export function setSignageMode(preset) {
-  SIGN_LIGHT.screen = preset?.signEmissive ?? 0.3;
-  SIGN_LIGHT.edge = preset?.signEdgeEmissive ?? 0.5;
+  SIGN_LIGHT.screen = preset?.signEmissive ?? 1.0;
+  SIGN_LIGHT.edge = preset?.signEdgeEmissive ?? 0.9;
 }
 
 
@@ -119,9 +119,8 @@ export const CITY_BILLBOARD_LOCATIONS = [
   //      wall of identical 16:9 rectangles reads as a spreadsheet.
   //
   // The rect passed to getPos is the square itself. Its edges are the CENTRES
-  // of the roads that box the crossing, so a frontage offset of 16 (north/south,
-  // narrow street) or 20 (east/west, wide avenue) lands a panel flat against the
-  // building wall opposite, facing back into the square.
+  // of the roads that box the crossing. Panels stand proud of the building
+  // walls facing into the square so they are never buried inside architecture.
 
   // North frontage - the big landscape pair over the crossing
   {
@@ -137,7 +136,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     orientation: "landscape",
     mount: "facade",
     anchor: "times",
-    getPos: (p) => ({ x: p.cx - 30, z: p.z0 - 16, yaw: 0 }),
+    getPos: (p) => ({ x: p.cx - 30, z: p.z0 - 14.8, yaw: 0 }),
   },
   {
     billboardNumber: 12,
@@ -152,7 +151,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     orientation: "landscape",
     mount: "facade",
     anchor: "times",
-    getPos: (p) => ({ x: p.cx + 34, z: p.z0 - 16, yaw: 0 }),
+    getPos: (p) => ({ x: p.cx + 34, z: p.z0 - 14.8, yaw: 0 }),
   },
   // North frontage - a tall portrait poster between them
   {
@@ -168,7 +167,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     orientation: "portrait",
     mount: "facade",
     anchor: "times",
-    getPos: (p) => ({ x: p.cx + 2, z: p.z0 - 16, yaw: 0 }),
+    getPos: (p) => ({ x: p.cx + 2, z: p.z0 - 14.8, yaw: 0 }),
   },
 
   // South frontage
@@ -185,7 +184,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     orientation: "landscape",
     mount: "facade",
     anchor: "times",
-    getPos: (p) => ({ x: p.cx + 30, z: p.z1 + 16, yaw: Math.PI }),
+    getPos: (p) => ({ x: p.cx + 30, z: p.z1 + 14.8, yaw: Math.PI }),
   },
   {
     billboardNumber: 15,
@@ -200,7 +199,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     orientation: "portrait",
     mount: "facade",
     anchor: "times",
-    getPos: (p) => ({ x: p.cx - 24, z: p.z1 + 16, yaw: Math.PI }),
+    getPos: (p) => ({ x: p.cx - 24, z: p.z1 + 14.8, yaw: Math.PI }),
   },
   {
     billboardNumber: 16,
@@ -215,7 +214,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     orientation: "landscape",
     mount: "facade",
     anchor: "times",
-    getPos: (p) => ({ x: p.cx - 46, z: p.z1 + 16, yaw: Math.PI }),
+    getPos: (p) => ({ x: p.cx - 46, z: p.z1 + 14.8, yaw: Math.PI }),
   },
 
   // East frontage - including a folded corner wrap
@@ -232,7 +231,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     orientation: "landscape",
     mount: "folded",
     anchor: "times",
-    getPos: (p) => ({ x: p.x1 + 20, z: p.cz - 34, yaw: -Math.PI / 2 }),
+    getPos: (p) => ({ x: p.x1 + 18.8, z: p.cz - 34, yaw: -Math.PI / 2 }),
   },
   {
     billboardNumber: 18,
@@ -247,7 +246,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     orientation: "portrait",
     mount: "facade",
     anchor: "times",
-    getPos: (p) => ({ x: p.x1 + 20, z: p.cz + 12, yaw: -Math.PI / 2 }),
+    getPos: (p) => ({ x: p.x1 + 18.8, z: p.cz + 12, yaw: -Math.PI / 2 }),
   },
   {
     billboardNumber: 19,
@@ -262,7 +261,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     orientation: "landscape",
     mount: "facade",
     anchor: "times",
-    getPos: (p) => ({ x: p.x1 + 20, z: p.cz + 42, yaw: -Math.PI / 2 }),
+    getPos: (p) => ({ x: p.x1 + 18.8, z: p.cz + 42, yaw: -Math.PI / 2 }),
   },
 
   // West frontage - the other corner wrap
@@ -279,7 +278,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     orientation: "landscape",
     mount: "folded",
     anchor: "times",
-    getPos: (p) => ({ x: p.x0 - 20, z: p.cz + 34, yaw: Math.PI / 2 }),
+    getPos: (p) => ({ x: p.x0 - 18.8, z: p.cz + 34, yaw: Math.PI / 2 }),
   },
   {
     billboardNumber: 21,
@@ -294,7 +293,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     orientation: "portrait",
     mount: "facade",
     anchor: "times",
-    getPos: (p) => ({ x: p.x0 - 20, z: p.cz - 12, yaw: Math.PI / 2 }),
+    getPos: (p) => ({ x: p.x0 - 18.8, z: p.cz - 12, yaw: Math.PI / 2 }),
   },
   {
     billboardNumber: 22,
@@ -309,7 +308,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     orientation: "landscape",
     mount: "facade",
     anchor: "times",
-    getPos: (p) => ({ x: p.x0 - 20, z: p.cz - 42, yaw: Math.PI / 2 }),
+    getPos: (p) => ({ x: p.x0 - 18.8, z: p.cz - 42, yaw: Math.PI / 2 }),
   },
 
   // Two eye-level totems standing ON the pedestrian pads
@@ -326,7 +325,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     orientation: "portrait",
     mount: "pole",
     anchor: "times",
-    getPos: (p) => ({ x: p.cx - 52, z: p.cz - 30, yaw: Math.PI * 0.25 }),
+    getPos: (p) => ({ x: p.cx - 50, z: p.cz - 28, yaw: Math.PI * 0.25 }),
   },
   {
     billboardNumber: 24,
@@ -341,7 +340,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     orientation: "portrait",
     mount: "pole",
     anchor: "times",
-    getPos: (p) => ({ x: p.cx + 52, z: p.cz + 30, yaw: -Math.PI * 0.75 }),
+    getPos: (p) => ({ x: p.cx + 50, z: p.cz + 28, yaw: -Math.PI * 0.75 }),
   },
 
   {
@@ -999,8 +998,8 @@ export function makeCityBillboard({ billboardDef, product, billboardRecord }) {
 
   // ── 1. Artwork ───────────────────────────────────────────────────────
   // Logical drawing space matches the panel's own aspect so nothing stretches.
-  const W = portrait ? 288 : 512;
-  const H = portrait ? 512 : 288;
+  const W = portrait ? 320 : 512;
+  const H = portrait ? 512 : 300;
 
   const cv = document.createElement("canvas");
   cv.width = W * SIGN_SS;
@@ -1009,86 +1008,88 @@ export function makeCityBillboard({ billboardDef, product, billboardRecord }) {
   ctx.scale(SIGN_SS, SIGN_SS);
   ctx.textRendering = "geometricPrecision";
 
-  // deep LED body
+  // Deep vibrant LED body
   const bgGrad = ctx.createLinearGradient(0, 0, W, H);
   if (isClaimed) {
-    bgGrad.addColorStop(0, "#080d1a");
+    bgGrad.addColorStop(0, "#08101e");
     bgGrad.addColorStop(0.5, "#0f172a");
     bgGrad.addColorStop(1, "#1e1b4b");
   } else {
-    bgGrad.addColorStop(0, "#030712");
-    bgGrad.addColorStop(0.5, "#0b1329");
-    bgGrad.addColorStop(1, "#082f49");
+    bgGrad.addColorStop(0, "#041021");
+    bgGrad.addColorStop(0.4, "#08213d");
+    bgGrad.addColorStop(1, "#03324d");
   }
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, W, H);
 
-  // pixel grid so it reads as a screen rather than a printed poster
-  ctx.strokeStyle = isClaimed ? "rgba(255, 255, 255, 0.05)" : "rgba(14, 165, 233, 0.12)";
+  // Digital LED grid pattern
+  ctx.strokeStyle = isClaimed ? "rgba(255, 255, 255, 0.08)" : "rgba(56, 189, 248, 0.18)";
   ctx.lineWidth = 1;
-  for (let x = 0; x < W; x += 32) {
+  for (let x = 0; x < W; x += 24) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, H);
     ctx.stroke();
   }
-  for (let y = 0; y < H; y += 32) {
+  for (let y = 0; y < H; y += 24) {
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(W, y);
     ctx.stroke();
   }
 
-  const PAD = 16;
-  const headerH = 36;
+  const PAD = 14;
+  const headerH = 34;
 
-  // header: status + the fixed monthly rate
-  ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
-  roundRect(ctx, PAD, 14, W - PAD * 2, headerH, 10);
+  // Header banner: status pill + slot number
+  ctx.fillStyle = isClaimed ? "rgba(30, 41, 59, 0.95)" : "rgba(12, 45, 72, 0.95)";
+  roundRect(ctx, PAD, 12, W - PAD * 2, headerH, 8);
   ctx.fill();
-  ctx.textBaseline = "alphabetic";
+  ctx.strokeStyle = isClaimed ? "#facc15" : "#38bdf8";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.textBaseline = "middle";
 
   if (portrait) {
-    ctx.fillStyle = isClaimed ? "#facc15" : "#38bdf8";
-    ctx.font = "900 13px 'Inter', sans-serif";
+    ctx.fillStyle = isClaimed ? "#fde047" : "#38bdf8";
+    ctx.font = "900 12px 'Inter', sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(isClaimed ? "● SPONSORED BILLBOARD" : "★ AVAILABLE AD SPACE", W / 2, 37);
+    ctx.fillText(isClaimed ? `● SPONSORED · #${bbNum}` : `★ AD SPACE #${bbNum}`, W / 2, 29);
   } else {
-    ctx.fillStyle = isClaimed ? "#facc15" : "#38bdf8";
-    ctx.font = isClaimed ? "bold 14px 'Inter', sans-serif" : "900 13px 'Inter', sans-serif";
+    ctx.fillStyle = isClaimed ? "#fde047" : "#38bdf8";
+    ctx.font = "900 13px 'Inter', sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(isClaimed ? "● SPONSORED BILLBOARD" : "★ AVAILABLE AD SPACE", PAD + 14, 37);
+    ctx.fillText(isClaimed ? `● SPONSORED BILLBOARD #${bbNum}` : `★ AVAILABLE AD SPACE #${bbNum}`, PAD + 12, 29);
 
     ctx.fillStyle = isClaimed ? "#38bdf8" : "#4ade80";
-    ctx.font = "bold 14px 'Inter', sans-serif";
+    ctx.font = "900 13px 'Inter', sans-serif";
     ctx.textAlign = "right";
-    ctx.fillText(`${isClaimed ? "Fixed Rate" : "Fixed Cost"}: ${costText}`, W - PAD - 14, 37);
+    ctx.fillText(costText, W - PAD - 12, 29);
   }
 
-  // CTA bar geometry - the ticker (added by attachLiveScreen) owns the last
-  // ~30px, so the bar is parked just above it in both orientations.
-  const ctaH = 54;
-  const ctaY = H - ctaH - 20;
+  const ctaH = 48;
+  const ctaY = H - ctaH - 24;
 
   if (isClaimed) {
-    const plate = portrait ? 96 : 76;
+    const plate = portrait ? 92 : 72;
     const plateX = portrait ? (W - plate) / 2 : 24;
-    const plateY = portrait ? 92 : 68;
+    const plateY = portrait ? 86 : 64;
 
     ctx.fillStyle = colorHex;
-    roundRect(ctx, plateX, plateY, plate, plate, 16);
+    roundRect(ctx, plateX, plateY, plate, plate, 14);
     ctx.fill();
     ctx.fillStyle = "#ffffff";
-    ctx.font = `900 ${Math.round(plate * 0.47)}px 'Inter', sans-serif`;
+    ctx.font = `900 ${Math.round(plate * 0.46)}px 'Inter', sans-serif`;
     ctx.textAlign = "center";
-    ctx.fillText(brandName.slice(0, 2).toUpperCase(), plateX + plate / 2, plateY + plate * 0.71);
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(brandName.slice(0, 2).toUpperCase(), plateX + plate / 2, plateY + plate * 0.70);
 
-    const textX = portrait ? W / 2 : 116;
-    const nameY = portrait ? plateY + plate + 52 : 104;
+    const textX = portrait ? W / 2 : 112;
+    const nameY = portrait ? plateY + plate + 48 : 98;
     ctx.textAlign = portrait ? "center" : "left";
     ctx.fillStyle = "#ffffff";
-    ctx.font = `900 ${portrait ? 30 : 32}px 'Inter', sans-serif`;
-    const maxChars = portrait ? 13 : 17;
+    ctx.font = `900 ${portrait ? 26 : 28}px 'Inter', sans-serif`;
+    const maxChars = portrait ? 14 : 18;
     ctx.fillText(
       brandName.length > maxChars ? `${brandName.slice(0, maxChars - 1)}…` : brandName,
       textX,
@@ -1096,121 +1097,125 @@ export function makeCityBillboard({ billboardDef, product, billboardRecord }) {
     );
 
     // category chip
-    ctx.font = "bold 12px 'Inter', sans-serif";
+    ctx.font = "bold 11px 'Inter', sans-serif";
     const catUpper = category.toUpperCase();
     const measuredCatW = ctx.measureText(catUpper).width;
     const maxAvailableChipW = portrait ? W - 60 : Math.min(220, W - 140);
-    const chipW = Math.min(maxAvailableChipW, measuredCatW + 24);
-    const chipX = portrait ? (W - chipW) / 2 : 116;
-    const chipY = portrait ? nameY + 16 : 116;
-    ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
-    roundRect(ctx, chipX, chipY, chipW, 24, 6);
+    const chipW = Math.min(maxAvailableChipW, measuredCatW + 20);
+    const chipX = portrait ? (W - chipW) / 2 : 112;
+    const chipY = portrait ? nameY + 14 : 108;
+    ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
+    roundRect(ctx, chipX, chipY, chipW, 22, 5);
     ctx.fill();
     ctx.fillStyle = "#e2e8f0";
     ctx.textAlign = "center";
-    let catFinal = catUpper;
-    if (ctx.measureText(catFinal).width > chipW - 12) {
-      while (ctx.measureText(catFinal + "…").width > chipW - 12 && catFinal.length > 3) {
-        catFinal = catFinal.slice(0, -1);
-      }
-      catFinal += "…";
-    }
-    ctx.fillText(catFinal, chipX + chipW / 2, chipY + 16);
+    ctx.fillText(catUpper, chipX + chipW / 2, chipY + 15);
 
     // tagline
     ctx.fillStyle = "#94a3b8";
-    ctx.font = `${portrait ? 15 : 16}px 'Inter', sans-serif`;
+    ctx.font = `${portrait ? 14 : 15}px 'Inter', sans-serif`;
     ctx.textAlign = portrait ? "center" : "left";
     const tagMax = portrait ? 30 : 48;
     ctx.fillText(
       tagline.length > tagMax ? `${tagline.slice(0, tagMax - 2)}…` : tagline,
       portrait ? W / 2 : 24,
-      chipY + (portrait ? 62 : 69)
+      chipY + (portrait ? 56 : 64)
     );
-
-    if (portrait) {
-      ctx.fillStyle = colorHex;
-      ctx.font = "900 64px 'Inter', sans-serif";
-      ctx.fillText(`#${rank}`, W / 2, ctaY - 40);
-    }
 
     const ctaGrad = ctx.createLinearGradient(24, ctaY, W - 24, ctaY + ctaH);
     ctaGrad.addColorStop(0, "#f05a38");
     ctaGrad.addColorStop(1, "#ea580c");
     ctx.fillStyle = ctaGrad;
-    roundRect(ctx, 24, ctaY, W - 48, ctaH, 14);
+    roundRect(ctx, 24, ctaY, W - 48, ctaH, 12);
     ctx.fill();
 
     ctx.fillStyle = "#ffffff";
     if (portrait) {
-      ctx.font = "bold 16px 'Inter', sans-serif";
+      ctx.font = "bold 15px 'Inter', sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("Click to Visit Website ↗", W / 2, ctaY + 34);
+      ctx.fillText("Click to Visit Website ↗", W / 2, ctaY + 30);
     } else {
-      ctx.font = "bold 18px 'Inter', sans-serif";
+      ctx.font = "bold 15px 'Inter', sans-serif";
       ctx.textAlign = "left";
-      ctx.fillText(`Rank #${rank} Official Brand`, 42, ctaY + 34);
-      ctx.font = "bold 16px 'Inter', sans-serif";
+      ctx.fillText(`Rank #${rank || 1} Official Sponsor`, 40, ctaY + 30);
+      ctx.font = "bold 15px 'Inter', sans-serif";
       ctx.textAlign = "right";
-      ctx.fillText("Click to Visit Website ↗", W - 42, ctaY + 34);
+      ctx.fillText("Click to Visit ↗", W - 40, ctaY + 30);
     }
   } else {
-    // ── Vacant: sell the space ────────────────────────────────────────
-    const boxY = portrait ? 76 : 62;
-    const boxH = ctaY - boxY - 18;
-    ctx.fillStyle = "rgba(14, 165, 233, 0.15)";
-    roundRect(ctx, 24, boxY, W - 48, boxH, 14);
+    // ── Vacant: High-impact ad invitation ─────────────────────────────
+    const boxY = portrait ? 68 : 58;
+    const boxH = ctaY - boxY - 14;
+
+    // Glowing container box
+    ctx.fillStyle = "rgba(14, 165, 233, 0.22)";
+    roundRect(ctx, 20, boxY, W - 40, boxH, 12);
     ctx.fill();
-    ctx.strokeStyle = "#0ea5e9";
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 2;
     ctx.stroke();
 
     ctx.textAlign = "center";
-    ctx.fillStyle = "#38bdf8";
+    ctx.textBaseline = "alphabetic";
+
     if (portrait) {
-      ctx.font = "900 34px 'Inter', sans-serif";
-      ctx.fillText("PLACE", W / 2, boxY + boxH * 0.24);
-      ctx.fillText("YOUR AD", W / 2, boxY + boxH * 0.4);
-      ctx.fillText("HERE", W / 2, boxY + boxH * 0.56);
+      ctx.fillStyle = "#38bdf8";
+      ctx.font = "900 28px 'Inter', sans-serif";
+      ctx.fillText("PLACE", W / 2, boxY + boxH * 0.22);
+      ctx.fillText("YOUR AD", W / 2, boxY + boxH * 0.38);
+      ctx.fillText("HERE", W / 2, boxY + boxH * 0.54);
+
+      // Price pill
+      ctx.fillStyle = "#facc15";
+      ctx.font = "900 20px 'Inter', sans-serif";
+      ctx.fillText(costText, W / 2, boxY + boxH * 0.74);
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "600 12px 'Inter', sans-serif";
+      ctx.fillText("1-Month Exclusive Sponsorship", W / 2, boxY + boxH * 0.88);
     } else {
-      ctx.font = "900 32px 'Inter', sans-serif";
-      ctx.fillText("PLACE YOUR AD HERE", W / 2, boxY + boxH * 0.32);
+      ctx.fillStyle = "#38bdf8";
+      ctx.font = "900 28px 'Inter', sans-serif";
+      ctx.fillText("⚡ PLACE YOUR AD HERE ⚡", W / 2, boxY + boxH * 0.32);
+
+      // Price badge
+      ctx.fillStyle = "#facc15";
+      ctx.font = "900 22px 'Inter', sans-serif";
+      ctx.fillText(`Fixed Rate: ${costText}`, W / 2, boxY + boxH * 0.58);
+
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "600 13px 'Inter', sans-serif";
+      ctx.fillText("Reach founders & players globally · 1-Month Placement Plan", W / 2, boxY + boxH * 0.80);
     }
 
-    ctx.fillStyle = "#facc15";
-    ctx.font = "bold 16px 'Inter', sans-serif";
-    ctx.fillText(costText, W / 2, boxY + boxH * (portrait ? 0.74 : 0.55));
-
-    ctx.fillStyle = "#e2e8f0";
-    ctx.font = "13px 'Inter', sans-serif";
-    ctx.fillText("1-Month Placement Plan", W / 2, boxY + boxH * (portrait ? 0.86 : 0.75));
-
-    const ctaGrad = ctx.createLinearGradient(24, ctaY, W - 24, ctaY + ctaH);
+    // CTA Button
+    const ctaGrad = ctx.createLinearGradient(20, ctaY, W - 20, ctaY + ctaH);
     ctaGrad.addColorStop(0, "#0284c7");
     ctaGrad.addColorStop(1, "#0369a1");
     ctx.fillStyle = ctaGrad;
-    roundRect(ctx, 24, ctaY, W - 48, ctaH, 14);
+    roundRect(ctx, 20, ctaY, W - 40, ctaH, 12);
     ctx.fill();
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = `bold ${portrait ? 14 : 16}px 'Inter', sans-serif`;
+    ctx.font = "900 16px 'Inter', sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(portrait ? "Click to Book ↗" : "Click This Screen to Book It ↗", W / 2, ctaY + 34);
+    ctx.fillText(portrait ? "⚡ CLICK TO BOOK [E] ↗" : "⚡ CLICK THIS SCREEN TO BUY [E] ↗", W / 2, ctaY + 30);
   }
 
   const tex = crispTexture(cv);
 
   // ── 2. The physical panel ────────────────────────────────────────────
-  // The screen is NOT on the bloom layer, and the accent frame is a thin
-  // OUTLINE rather than a full plate. A solid glowing rectangle behind a
-  // 20-metre screen is what turned Times Square into a white blob.
   const screenMat = new THREE.MeshStandardMaterial({
     map: tex,
     emissiveMap: tex,
     emissive: new THREE.Color(0xffffff),
-    emissiveIntensity: SIGN_LIGHT.screen,
-    roughness: 0.32,
-    metalness: 0.05,
+    emissiveIntensity: 1.0,
+    roughness: 0.18,
+    metalness: 0.04,
+    side: THREE.DoubleSide,
   });
   const steelMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.8 });
   const frameMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.3, metalness: 0.9 });

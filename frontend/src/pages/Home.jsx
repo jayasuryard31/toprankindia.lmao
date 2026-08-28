@@ -6,6 +6,7 @@ import MapControls from "../components/map/MapControls";
 import MapViewToggle from "../components/map/MapViewToggle";
 import PanelToggles from "../components/map/PanelToggles";
 import CurrencySelector from "../components/map/CurrencySelector";
+import FpsBadge from "../components/map/FpsBadge";
 import { useMapStore } from "../components/map/useMapStore";
 import BidBar from "../components/panels/BidBar";
 import LeftSidebar from "../components/panels/LeftSidebar";
@@ -128,9 +129,12 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="absolute top-4 right-4 z-40 hidden md:flex items-center gap-2">
+      <div className="absolute top-4 right-4 z-40 flex items-center gap-2">
+        <FpsBadge />
         <CurrencySelector />
-        <PanelToggles />
+        <div className="hidden md:block">
+          <PanelToggles />
+        </div>
       </div>
 
       {/* ── Left rail: City Districts ───────────────────────────────── */}

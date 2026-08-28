@@ -170,10 +170,18 @@ export default function CityMiniMap({
         ctx.fill();
       });
 
-      // billboards
+      // billboards (city-wide & Times Square advertising screens)
       engine?.brandBillboardsGroup?.children.forEach((bb) => {
-        ctx.fillStyle = bb.userData?.isOccupied ? "#7dffb0" : "rgba(56,189,248,0.85)";
-        ctx.fillRect(toX(bb.position.x) - 1.5, toY(bb.position.z) - 1.5, 3, 3);
+        const bx = toX(bb.position.x);
+        const by = toY(bb.position.z);
+        const isOccupied = bb.userData?.isOccupied;
+        ctx.fillStyle = isOccupied ? "#10b981" : "#38bdf8";
+        ctx.beginPath();
+        ctx.arc(bx, by, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,0.6)";
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
       });
 
       // traffic - makes the overview feel alive

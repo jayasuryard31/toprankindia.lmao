@@ -36,7 +36,7 @@ export default function BillboardBookingPopup({ billboard, screenPos, onClose, o
     [host, url]
   );
 
-  if (!billboard || !screenPos) return null;
+  if (!billboard) return null;
 
   const loadRazorpay = () =>
     new Promise((resolve) => {
@@ -188,54 +188,33 @@ export default function BillboardBookingPopup({ billboard, screenPos, onClose, o
   );
   const occupiedBrand = billboard?.brandName || billboard?.product?.websiteName || billboard?.brand || "Another Brand";
 
-  const winW = typeof window !== "undefined" ? window.innerWidth : 1000;
-  const winH = typeof window !== "undefined" ? window.innerHeight : 800;
-  const rawX = screenPos?.x ?? winW / 2;
-  const rawY = screenPos?.y ?? winH / 2;
-
-  const NAVBAR_HEIGHT = 56;
-  const TOP_SAFE_MARGIN = 16;
-  const MIN_TOP = NAVBAR_HEIGHT + TOP_SAFE_MARGIN; // 72px
-  const BOTTOM_SAFE_MARGIN = 20;
-
-  const popupWidth = 350;
-  const halfW = popupWidth / 2;
-  const posX = Math.max(halfW + 12, Math.min(winW - halfW - 12, rawX));
-
-  const estimatedH = 460;
-  const placeAbove = (rawY - estimatedH - 16) >= MIN_TOP;
-
-  let posY;
-  if (placeAbove) {
-    posY = Math.max(MIN_TOP, rawY - 14 - estimatedH);
-  } else {
-    posY = Math.max(MIN_TOP, Math.min(winH - estimatedH - BOTTOM_SAFE_MARGIN, rawY + 16));
-  }
-
   return (
     <div
-      style={{ left: `${posX}px`, top: `${posY}px` }}
-      onClick={(e) => e.stopPropagation()}
-      className="absolute -translate-x-1/2 z-40 w-84 sm:w-92 max-w-[calc(100vw-24px)] max-h-[calc(100vh-88px)] overflow-y-auto glass-panel p-4 sm:p-5 rounded-3xl shadow-2xl border border-amber-400/40 text-xs animate-in fade-in zoom-in-95 duration-200 pointer-events-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200 pointer-events-auto"
+      onClick={onClose}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-400/20 text-amber-500 dark:text-amber-300 border border-amber-400/30 flex-shrink-0">
-            ★ BILLBOARD #{bbNumber}
-          </span>
-          <span className="text-xs font-bold text-charcoal dark:text-cream truncate">
-            {billboard.billboardName || billboard.name || `Billboard #${bbNumber}`}
-          </span>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-md max-h-[90vh] overflow-y-auto glass-panel p-5 sm:p-6 rounded-3xl shadow-2xl border border-amber-400/40 text-xs animate-in zoom-in-95 duration-200"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="px-2.5 py-1 rounded-lg text-[11px] font-black font-mono bg-amber-400/20 text-amber-500 dark:text-amber-300 border border-amber-400/30 flex-shrink-0">
+              ★ BILLBOARD #{bbNumber}
+            </span>
+            <span className="text-sm font-bold text-charcoal dark:text-cream truncate">
+              {billboard.billboardName || billboard.name || `Billboard #${bbNumber}`}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-full flex items-center justify-center text-muted hover:text-charcoal dark:hover:text-white bg-surface-soft dark:bg-elevated transition-colors cursor-pointer"
+            title="Close"
+          >
+            <IconX className="w-4 h-4" />
+          </button>
         </div>
-        <button
-          onClick={onClose}
-          className="w-6 h-6 rounded-full flex items-center justify-center text-muted hover:text-charcoal dark:hover:text-white bg-surface-soft dark:bg-elevated transition-colors cursor-pointer"
-          title="Close"
-        >
-          <IconX className="w-3.5 h-3.5" />
-        </button>
-      </div>
 
       {/* Occupied Notice if another brand already has this spot */}
       {isOccupied && (
@@ -359,14 +338,8 @@ export default function BillboardBookingPopup({ billboard, screenPos, onClose, o
           <IconArrowUpRight className="w-3.5 h-3.5" />
         </button>
       </form>
-
-      {/* Anchor Arrow */}
-      {isTopClose ? (
-        <div className="absolute left-1/2 -top-2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-white/90 dark:border-b-[#1E1B18]/90" />
-      ) : (
-        <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white/90 dark:border-t-[#1E1B18]/90" />
-      )}
     </div>
+  </div>
   );
 }
 

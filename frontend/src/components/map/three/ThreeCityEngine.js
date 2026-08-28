@@ -110,6 +110,7 @@ export class ThreeCityEngine {
     this.animFrameId = null;
     this._lastTime = typeof performance !== "undefined" ? performance.now() : Date.now();
     this._fps = 60;
+    if (typeof window !== "undefined") window.__triEngine = this;
 
     this.target = new THREE.Vector3(0, 0, 0);
     this.spherical = new THREE.Spherical(2050, Math.PI / 3.5, Math.PI * 0.18);
@@ -2740,6 +2741,35 @@ export class ThreeCityEngine {
     return out;
   }
 
+  getProjectedCityBillboards() {
+    if (!this.camera || !this.renderer) return [];
+    const w = this.renderer.domElement.clientWidth;
+    const h = this.renderer.domElement.clientHeight;
+    const out = [];
+    if (!this.brandBillboardsGroup) return out;
+    this.brandBillboardsGroup.children.forEach((bb) => {
+      const u = bb.userData;
+      if (!u || !u.billboardDef) return;
+      const elev = (u.billboardDef.elevation || 8) + (u.billboardDef.height || 7) / 2;
+      const v = V0.set(bb.position.x, elev, bb.position.z).project(this.camera);
+      if (v.z > 1) return;
+      out.push({
+        id: u.billboardDef.id,
+        billboardNumber: u.billboardNumber,
+        name: u.billboardName || u.billboardDef.name,
+        fixedCost: u.fixedCost || u.billboardDef.costFormatted,
+        costUSD: u.costUSD || u.billboardDef.costUSD,
+        isOccupied: Boolean(u.isOccupied),
+        brand: u.brand || u.product?.websiteName,
+        color: u.color || (u.isOccupied ? "#F05A38" : "#38bdf8"),
+        billboardDef: u.billboardDef,
+        screenX: (v.x * 0.5 + 0.5) * w,
+        screenY: (-(v.y * 0.5) + 0.5) * h,
+      });
+    });
+    return out;
+  }
+
   getProjectedDistrictCards() {
     if (!this.camera || !this.renderer) return [];
     const w = this.renderer.domElement.clientWidth;
@@ -2996,10 +3026,51 @@ export class ThreeCityEngine {
             type: "billboard",
             object: root,
             billboardDef: root.userData.billboardDef,
+            billboardNumber: root.userData.billboardNumber,
+            billboardId: root.userData.billboardId || root.userData.billboardDef.id,
+            code: root.userData.code || root.userData.billboardDef.id,
+            rateUSD: root.userData.costUSD || root.userData.billboardDef.costUSD,
             product: root.userData.product,
             position: root.position,
             width: root.userData.billboardDef.width || 12,
             height: root.userData.billboardDef.height || 7,
+            color: root.userData.color || "#38bdf8",
+            colorHex: 0x38bdf8,
+          };
+        }
+      }
+    }
+
+    // 2b. Raycast against Times Square wall-mounted screens / billboard panels
+    if (this.timesSquareGroup) {
+      const tsHits = this.raycaster.intersectObjects(this.timesSquareGroup.children, true);
+      const tsScreenHit = tsHits.find((h) => h.object.userData?.isTimesSquareScreen || h.object.userData?.isBillboard);
+      if (tsScreenHit) {
+        const tsBillboards = this.brandBillboardsGroup?.children.filter(
+          (b) => b.userData?.billboardDef?.anchor === "times"
+        ) || [];
+        let bestBB = tsBillboards[0];
+        let minD = Infinity;
+        for (const b of tsBillboards) {
+          const d = tsScreenHit.point ? b.position.distanceTo(tsScreenHit.point) : 0;
+          if (d < minD) {
+            minD = d;
+            bestBB = b;
+          }
+        }
+        if (bestBB && bestBB.userData?.billboardDef) {
+          return {
+            type: "billboard",
+            object: bestBB,
+            billboardDef: bestBB.userData.billboardDef,
+            billboardNumber: bestBB.userData.billboardNumber,
+            billboardId: bestBB.userData.billboardId || bestBB.userData.billboardDef.id,
+            code: bestBB.userData.code || bestBB.userData.billboardDef.id,
+            rateUSD: bestBB.userData.costUSD || bestBB.userData.billboardDef.costUSD,
+            product: bestBB.userData.product,
+            position: bestBB.position,
+            width: bestBB.userData.billboardDef.width || 12,
+            height: bestBB.userData.billboardDef.height || 7,
             color: "#38bdf8",
             colorHex: 0x38bdf8,
           };
