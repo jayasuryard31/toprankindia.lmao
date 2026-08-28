@@ -2,29 +2,28 @@ import { useState, useEffect, useRef } from "react";
 import { IconX, IconArrowUpRight } from "../../components/common/Icons";
 
 /**
- * Temporary In-World Proximity Chat Popup
- * - Triggers when two characters are close to each other.
- * - Allows live temporary communication over WebSocket.
- * - NOT saved to any database (ephemeral in-memory session).
+ * Temporary In-World Proximity Chat Panel
+ * - Pinned to the 3D in-world character in screen space with leader line.
+ * - Works strictly when two players come close to each other.
+ * - Direct peer messaging over the existing WebSocket connection.
+ * - NOT saved to any database (ephemeral session).
  */
 export default function ProximityChatModal({
   targetPlayer,
   messages = [],
   onSendMessage,
   onClose,
-  screenPos,
+  anchor,
 }) {
   const [text, setText] = useState("");
   const inputRef = useRef(null);
   const scrollRef = useRef(null);
 
   useEffect(() => {
-    // Focus the text input immediately
     inputRef.current?.focus();
   }, []);
 
   useEffect(() => {
-    // Auto-scroll to the newest message
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
@@ -38,15 +37,15 @@ export default function ProximityChatModal({
     setText("");
   };
 
-  const winW = typeof window !== "undefined" ? window.innerWidth : 1200;
-  const winH = typeof window !== "undefined" ? window.innerHeight : 800;
-  const rawX = screenPos?.x ?? winW / 2;
-  const rawY = screenPos?.y ?? winH / 2;
-
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 720;
   const CARD_W = 340;
-  const halfW = CARD_W / 2;
-  const posX = Math.max(halfW + 16, Math.min(winW - halfW - 16, rawX));
-  const posY = Math.max(76, Math.min(winH - 420, rawY - 240));
+  const ax = anchor?.x ?? vw / 2;
+  const ay = anchor?.y ?? vh / 2;
+  const toRight = ax < vw / 2;
+  let left = toRight ? ax + 34 : ax - 34 - CARD_W;
+  left = Math.min(Math.max(12, left), vw - CARD_W - 12);
+  const top = Math.min(Math.max(70, ay - 140), Math.max(70, vh - 380));
 
   const playerColor = targetPlayer?.color
     ? `#${targetPlayer.color.toString(16).padStart(6, "0")}`
@@ -54,13 +53,30 @@ export default function ProximityChatModal({
 
   return (
     <>
-      {/* Subtle click-away backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/20 pointer-events-auto" onClick={onClose} />
+      {/* Click-away catcher - transparent, keeps the world visible */}
+      <div className="absolute inset-0 z-40 pointer-events-auto" onClick={onClose} />
+
+      {/* In-world leader line from the character's head to the card */}
+      {anchor?.visible && (
+        <svg className="absolute inset-0 z-40 pointer-events-none" width="100%" height="100%">
+          <line
+            x1={ax}
+            y1={ay}
+            x2={toRight ? left : left + CARD_W}
+            y2={top + 36}
+            stroke="#38bdf8"
+            strokeWidth="1.5"
+            strokeDasharray="4 3"
+            opacity="0.8"
+          />
+          <circle cx={ax} cy={ay} r="3" fill="#38bdf8" />
+        </svg>
+      )}
 
       <div
-        style={{ left: `${posX}px`, top: `${posY}px` }}
+        style={{ left: `${left}px`, top: `${top}px` }}
         onClick={(e) => e.stopPropagation()}
-        className="fixed -translate-x-1/2 z-50 w-84 sm:w-92 max-w-[calc(100vw-24px)] glass-panel p-4 rounded-3xl shadow-2xl border border-sky-400/50 text-xs animate-in fade-in zoom-in-95 duration-150 pointer-events-auto flex flex-col"
+        className="absolute z-50 w-84 sm:w-88 max-w-[calc(100vw-24px)] glass-panel p-4 rounded-3xl shadow-2xl border border-sky-400/60 text-xs animate-in fade-in zoom-in-95 duration-150 pointer-events-auto flex flex-col backdrop-blur-xl bg-slate-950/85"
       >
         {/* Header */}
         <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-white/10">

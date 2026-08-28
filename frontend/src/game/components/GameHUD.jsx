@@ -76,8 +76,11 @@ export default function GameHUD({
           <div className="px-3 py-2 rounded-xl bg-black/25 backdrop-blur-md border border-white/10 text-[11px] text-white/70 font-mono leading-relaxed">
             <span className="text-white/90">WASD</span> move · <span className="text-white/90">Shift</span> run ·{" "}
             <span className="text-white/90">Space</span> jump · <span className="text-white/90">C</span> crouch ·{" "}
-            <span className="text-white/90">E</span> interact · <span className="text-sky-300 font-bold">M</span> chat ·{" "}
-            <span className="text-white/90">O</span> emote
+            <span className="text-white/90">E</span> interact
+            {nearbyPlayer ? (
+              <> · <span className="text-sky-300 font-bold animate-pulse">M</span> <span className="text-sky-300 font-semibold">chat</span></>
+            ) : null}{" "}
+            · <span className="text-white/90">O</span> emote
             {!locked && <div className="text-white/45 mt-0.5">click the view to capture the mouse</div>}
           </div>
         </div>

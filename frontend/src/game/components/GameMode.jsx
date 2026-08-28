@@ -90,11 +90,18 @@ export default function GameMode({ engine, onExit, onOutbidSuccess }) {
   }, [engine]);
 
   const openChat = useCallback((target = null) => {
-    const targetP = target || state.nearbyPlayer || ctrlRef.current?.getNearbyPlayer();
-    if (!targetP) return;
+    const targetP = target || state.nearbyPlayer;
+    if (!targetP) return; // Strict: only open when another player is close
     if (document.pointerLockElement) document.exitPointerLock();
     setChatPlayer(targetP);
   }, [state.nearbyPlayer]);
+
+  // Auto-close chat if players walk away from each other
+  useEffect(() => {
+    if (chatPlayer && !state.nearbyPlayer) {
+      setChatPlayer(null);
+    }
+  }, [chatPlayer, state.nearbyPlayer]);
 
   const handleSendChat = useCallback((text) => {
     if (!ctrlRef.current) return;
@@ -136,7 +143,10 @@ export default function GameMode({ engine, onExit, onOutbidSuccess }) {
         return;
       }
       if (e.code === "KeyM") {
-        openChat();
+        // Strict: M key ONLY opens chat when another player is in proximity
+        if (state.nearbyPlayer) {
+          openChat(state.nearbyPlayer);
+        }
         return;
       }
       if (e.code === "Space") {
@@ -295,7 +305,7 @@ export default function GameMode({ engine, onExit, onOutbidSuccess }) {
           messages={chatMessages}
           onSendMessage={handleSendChat}
           onClose={() => setChatPlayer(null)}
-          screenPos={centerPos}
+          anchor={state.headAnchor}
         />
       )}
 
