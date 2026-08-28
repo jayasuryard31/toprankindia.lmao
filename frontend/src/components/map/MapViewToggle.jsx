@@ -2,8 +2,8 @@ import { useMapStore } from "./useMapStore";
 
 /**
  * Two independent switches that share one control strip:
- *   • 3D / 2D    — isometric city  vs  top-down Google-Maps plan
- *   • Map / Heat — plain city      vs  bid-value heat overlay
+ *   • 3D / 2D    - isometric city  vs  top-down Google-Maps plan
+ *   • Map / Heat - plain city      vs  bid-value heat overlay
  */
 export default function MapViewToggle() {
   const showHeatmap = useMapStore((s) => s.showHeatmap);

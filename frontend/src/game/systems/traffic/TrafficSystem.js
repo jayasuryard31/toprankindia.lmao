@@ -1,5 +1,5 @@
 /**
- * TrafficSystem — reserved extension point (not wired this build).
+ * TrafficSystem - reserved extension point (not wired this build).
  *
  * The map layer already drives cars strictly along `cityGrid.roadSegments()`
  * (verified never on grass/water). This system will add:

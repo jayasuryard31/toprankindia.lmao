@@ -1,17 +1,17 @@
 import * as THREE from "three";
 
 /**
- * Stylised cartoon character — chibi proportions (big rounded head, soft
+ * Stylised cartoon character - chibi proportions (big rounded head, soft
  * limbs, chunky mitt hands), built on a real joint hierarchy so PlayerAnimator
  * can drive believable motion.
  *
- * Rig contract (do not rename — PlayerAnimator drives these):
+ * Rig contract (do not rename - PlayerAnimator drives these):
  *   root, hip, spine, chest, neck, head,
  *   armL/armR { shoulder, elbow, wrist }, legL/legR { hipJoint, knee, ankle }
  */
 
 const P = {
-  hipY: 0.68, // pelvis height — animator reads this as its baseline
+  hipY: 0.68, // pelvis height - animator reads this as its baseline
   spine: 0.16,
   chest: 0.2,
   neck: 0.05,
@@ -88,7 +88,7 @@ export function createPlayerModel({
   chest.position.y = P.spine * 0.6;
   spine.add(chest);
 
-  // rounded egg torso — wider at the shoulders, tucked at the waist
+  // rounded egg torso - wider at the shoulders, tucked at the waist
   const torso = mesh(new THREE.SphereGeometry(0.205, 20, 16), mats.shirt);
   torso.scale.set(1.05, 1.1, 0.86);
   torso.position.y = 0.1;

@@ -1,5 +1,5 @@
 /**
- * timeOfDay.js — the city's clock.
+ * timeOfDay.js - the city's clock.
  *
  * Velora Harbor runs on the VIEWER'S real local time (the device clock, which
  * already carries their timezone), collapsed into three authored looks:
@@ -66,7 +66,7 @@ export const TOD_PRESETS = {
     cloudColor: 0xffffff,
     cloudOpacity: 0.72,
 
-    // Artificial light — off in daylight.
+    // Artificial light - off in daylight.
     windowEmissive: 0.06,
     lampIntensity: 0.12,
     lampVisible: false,

@@ -223,108 +223,139 @@ export class TrafficLightSystem {
       roughness: 0.6,
     });
 
+    // ── Why this is instanced ──────────────────────────────────────────
+    // Every junction used to be 68 individual meshes (4 posts x 17 parts) and
+    // 24 freshly-minted lens materials. Across the grid that was ~7,300 meshes
+    // and ~4,000 draw calls a frame - measured as the single largest cost in
+    // the whole renderer, more than everything else combined.
+    //
+    // Every post is geometrically identical; only its transform differs. And
+    // crucially the SIGNAL STATE IS GLOBAL - `_updateLightVisuals` drives every
+    // junction from one `avenueState`/`streetState` pair, so the whole city
+    // only ever shows two distinct lens states at once. That means the lenses
+    // need exactly six shared materials (axis x colour), not one set per head.
+    //
+    // Same geometry, same materials, same positions, same emissive behaviour -
+    // 11 draw calls instead of ~4,000.
+    const lens = (on, off) => ({ on, off });
+    // colour / emissive pairs lifted verbatim from the previous per-head materials
+    this.LENS_SPEC = {
+      red: lens({ e: 0xff1111, i: 2.4, c: 0xff3333 }, { e: 0x220000, i: 0.15, c: 0x330000 }),
+      yellow: lens({ e: 0xffaa00, i: 2.4, c: 0xffcc00 }, { e: 0x221a00, i: 0.15, c: 0x332600 }),
+      green: lens({ e: 0x00ff66, i: 2.4, c: 0x33ff88 }, { e: 0x002208, i: 0.15, c: 0x003311 }),
+    };
+
+    // Six shared lens materials: one per (axis, colour). These are what
+    // `_updateLightVisuals` now writes to - six assignments a frame, not 2,568.
+    this.lensMats = {};
+    for (const axis of ["avenue", "street"]) {
+      this.lensMats[axis] = {};
+      for (const col of ["red", "yellow", "green"]) {
+        const off = this.LENS_SPEC[col].off;
+        this.lensMats[axis][col] = new THREE.MeshStandardMaterial({
+          color: off.c,
+          emissive: off.e,
+          emissiveIntensity: off.i,
+          roughness: 0.3,
+        });
+      }
+    }
+
+    const corners = this.junctions.length * 4;
+    const mk = (geo, mat, count, bloom = false) => {
+      const m = new THREE.InstancedMesh(geo, mat, count);
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      m.count = 0; // filled in below
+      if (bloom) {
+        m.userData.bloom = true;
+        m.layers.enable(1);
+      }
+      m.frustumCulled = false; // posts blanket the whole grid; per-instance culling is not a thing
+      this.group.add(m);
+      return m;
+    };
+
+    const baseIM = mk(new THREE.CylinderGeometry(0.38, 0.45, 0.5, 12), steelMat, corners);
+    const poleIM = mk(new THREE.CylinderGeometry(0.14, 0.18, 5.4, 12), steelMat, corners);
+    const armIM = mk(new THREE.CylinderGeometry(0.09, 0.11, 4.2, 8), steelMat, corners);
+    const boxIM = mk(new THREE.BoxGeometry(0.55, 1.45, 0.42), boxMat, corners * 2);
+    const hoodIM = mk(
+      new THREE.CylinderGeometry(0.2, 0.2, 0.22, 12, 1, true, 0, Math.PI),
+      visorMat,
+      corners * 6
+    );
+    const lensGeo = new THREE.SphereGeometry(0.16, 12, 10);
+    const lensIM = {
+      avenue: {}, street: {},
+    };
+    for (const axis of ["avenue", "street"]) {
+      for (const col of ["red", "yellow", "green"]) {
+        lensIM[axis][col] = mk(lensGeo, this.lensMats[axis][col], corners, true);
+      }
+    }
+
+    // Local part offsets, identical to the old per-post group layout.
+    const LENS_Y = { red: 0.42, yellow: 0.0, green: -0.42 };
+    const HEADS = [
+      { x: 0, y: 3.8 },
+      { x: 3.4, y: 5.0 },
+    ];
+
+    const post = new THREE.Object3D(); // the old postGroup transform
+    const part = new THREE.Object3D(); // a part, in post-local space
+    const world = new THREE.Matrix4();
+    const push = (im, m) => { im.setMatrixAt(im.count++, m); };
+    const place = (im, px, py, pz, rot, scale) => {
+      part.position.set(px, py, pz);
+      part.rotation.set(rot?.x || 0, rot?.y || 0, rot?.z || 0);
+      part.scale.set(scale?.x ?? 1, scale?.y ?? 1, scale?.z ?? 1);
+      part.updateMatrix();
+      world.multiplyMatrices(post.matrix, part.matrix);
+      push(im, world);
+    };
+
     this.junctions.forEach((j) => {
-      // 4 Traffic Light Posts at the corners of each junction
-      const corners = [
+      const cornerDefs = [
         { x: j.x + halfA, z: j.z + halfS, rotY: Math.PI },
         { x: j.x - halfA, z: j.z - halfS, rotY: 0 },
         { x: j.x + halfA, z: j.z - halfS, rotY: -Math.PI / 2 },
         { x: j.x - halfA, z: j.z + halfS, rotY: Math.PI / 2 },
       ];
 
-      corners.forEach((c, cIdx) => {
-        const postGroup = new THREE.Group();
-        postGroup.position.set(c.x, 0, c.z);
-        postGroup.rotation.y = c.rotY;
+      cornerDefs.forEach((c, cIdx) => {
+        post.position.set(c.x, 0, c.z);
+        post.rotation.set(0, c.rotY, 0);
+        post.scale.set(1, 1, 1);
+        post.updateMatrix();
 
-        // 1. Concrete Base Pedestal
-        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.45, 0.5, 12), steelMat);
-        base.position.y = 0.25;
-        postGroup.add(base);
+        place(baseIM, 0, 0.25, 0);
+        place(poleIM, 0, 2.7, 0);
+        place(armIM, 2.1, 5.2, 0, { z: -Math.PI / 2 });
 
-        // 2. Vertical Steel Mast Pole
-        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 5.4, 12), steelMat);
-        pole.position.y = 2.7;
-        postGroup.add(pole);
-
-        // 3. Cantilever Overhead Arm extending over lane
-        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 4.2, 8), steelMat);
-        arm.rotation.z = -Math.PI / 2;
-        arm.position.set(2.1, 5.2, 0);
-        postGroup.add(arm);
-
-        // 4. Curbside Signal Head Box & Overhead Signal Head Box
-        const buildSignalHead = (posX, posY, targetAxis) => {
-          const headGroup = new THREE.Group();
-          headGroup.position.set(posX, posY, 0);
-
-          // Housing Box
-          const box = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.45, 0.42), boxMat);
-          headGroup.add(box);
-
-          // Visors and Lenses (Red, Yellow, Green)
-          const lensMats = {
-            red: new THREE.MeshStandardMaterial({
-              color: 0x330000,
-              emissive: 0x220000,
-              emissiveIntensity: 0.2,
-              roughness: 0.3,
-            }),
-            yellow: new THREE.MeshStandardMaterial({
-              color: 0x332600,
-              emissive: 0x221a00,
-              emissiveIntensity: 0.2,
-              roughness: 0.3,
-            }),
-            green: new THREE.MeshStandardMaterial({
-              color: 0x003311,
-              emissive: 0x002208,
-              emissiveIntensity: 0.2,
-              roughness: 0.3,
-            }),
-          };
-
-          const lensOffsets = [
-            { type: "red", y: 0.42, mat: lensMats.red },
-            { type: "yellow", y: 0.0, mat: lensMats.yellow },
-            { type: "green", y: -0.42, mat: lensMats.green },
-          ];
-
-          lensOffsets.forEach((l) => {
-            // Lens
-            const lens = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), l.mat);
-            lens.scale.set(1.0, 1.0, 0.45);
-            lens.position.set(0, l.y, 0.20);
-            lens.userData.bloom = true;
-            headGroup.add(lens);
-
-            // Sun Visor Hood
-            const hood = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.20, 0.22, 12, 1, true, 0, Math.PI), visorMat);
-            hood.rotation.x = Math.PI / 2;
-            hood.position.set(0, l.y + 0.06, 0.24);
-            headGroup.add(hood);
-          });
-
-          postGroup.add(headGroup);
-
-          return {
-            targetAxis, // "avenue" (Z) or "street" (X)
-            mats: lensMats,
-          };
-        };
-
-        const head1 = buildSignalHead(0, 3.8, cIdx % 2 === 0 ? "avenue" : "street");
-        const head2 = buildSignalHead(3.4, 5.0, cIdx % 2 === 0 ? "avenue" : "street");
-
-        this.lights.push({
-          junction: j,
-          postGroup,
-          heads: [head1, head2],
+        const axis = cIdx % 2 === 0 ? "avenue" : "street";
+        HEADS.forEach((h) => {
+          place(boxIM, h.x, h.y, 0);
+          for (const col of ["red", "yellow", "green"]) {
+            const ly = LENS_Y[col];
+            // lens: flattened sphere, sitting proud of the housing
+            place(lensIM[axis][col], h.x, h.y + ly, 0.2, null, { x: 1, y: 1, z: 0.45 });
+            // sun visor hood above each lens
+            place(hoodIM, h.x, h.y + ly + 0.06, 0.24, { x: Math.PI / 2 });
+          }
         });
 
-        this.group.add(postGroup);
+        // `lights` is kept so the rest of the system (and any future per-junction
+        // logic) still has a handle on each post, but it no longer owns meshes.
+        this.lights.push({ junction: j, axis });
       });
     });
+
+    [baseIM, poleIM, armIM, boxIM, hoodIM].forEach((m) => (m.instanceMatrix.needsUpdate = true));
+    for (const axis of ["avenue", "street"]) {
+      for (const col of ["red", "yellow", "green"]) {
+        lensIM[axis][col].instanceMatrix.needsUpdate = true;
+      }
+    }
   }
 
   _spawnTrafficPolice() {
@@ -398,45 +429,21 @@ export class TrafficLightSystem {
       j.streetState = streetState;
     });
 
-    // Update 3D Light Meshes Emissive Colors
-    this.lights.forEach((light) => {
-      light.heads.forEach((head) => {
-        const state = head.targetAxis === "avenue" ? avenueState : streetState;
-
-        // Red Lens
-        if (state === "RED") {
-          head.mats.red.emissive.setHex(0xff1111);
-          head.mats.red.emissiveIntensity = 2.4;
-          head.mats.red.color.setHex(0xff3333);
-        } else {
-          head.mats.red.emissive.setHex(0x220000);
-          head.mats.red.emissiveIntensity = 0.15;
-          head.mats.red.color.setHex(0x330000);
-        }
-
-        // Yellow Lens
-        if (state === "YELLOW") {
-          head.mats.yellow.emissive.setHex(0xffaa00);
-          head.mats.yellow.emissiveIntensity = 2.4;
-          head.mats.yellow.color.setHex(0xffcc00);
-        } else {
-          head.mats.yellow.emissive.setHex(0x221a00);
-          head.mats.yellow.emissiveIntensity = 0.15;
-          head.mats.yellow.color.setHex(0x332600);
-        }
-
-        // Green Lens
-        if (state === "GREEN") {
-          head.mats.green.emissive.setHex(0x00ff66);
-          head.mats.green.emissiveIntensity = 2.4;
-          head.mats.green.color.setHex(0x33ff88);
-        } else {
-          head.mats.green.emissive.setHex(0x002208);
-          head.mats.green.emissiveIntensity = 0.15;
-          head.mats.green.color.setHex(0x003311);
-        }
-      });
-    });
+    // Update the six shared lens materials. Signal state is global, so this
+    // is six writes a frame - it used to walk every head and touch ~2,568
+    // material objects.
+    const applyLens = (axis, state) => {
+      for (const col of ["red", "yellow", "green"]) {
+        const lit = state === col.toUpperCase();
+        const spec = lit ? this.LENS_SPEC[col].on : this.LENS_SPEC[col].off;
+        const mat = this.lensMats[axis][col];
+        mat.emissive.setHex(spec.e);
+        mat.emissiveIntensity = spec.i;
+        mat.color.setHex(spec.c);
+      }
+    };
+    applyLens("avenue", avenueState);
+    applyLens("street", streetState);
 
     // ── 2. Traffic Police Officers Animation ─────────────────────────
     // Every 10s standing, raises stick for 5s (total cycle 15s)

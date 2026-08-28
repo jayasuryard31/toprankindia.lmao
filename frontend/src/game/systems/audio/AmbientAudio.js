@@ -1,5 +1,5 @@
 /**
- * AmbientAudio — reserved extension point (not wired this build).
+ * AmbientAudio - reserved extension point (not wired this build).
  *
  * WebAudio-only (the artifact/CSP context blocks external audio files), so
  * ambience is synthesised: filtered noise beds for wind / ocean / city hum,

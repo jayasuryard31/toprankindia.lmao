@@ -1,4 +1,4 @@
-# TopRankIndia — Frontend Integration Guide
+# TopRankIndia - Frontend Integration Guide
 
 ## Base URL
 
@@ -43,12 +43,12 @@ Every API returns this envelope:
 | **POST** | `/payments/webhook` | Razorpay webhook payload | `{ "status": "ok" }` | Razorpay server-to-server. Do not call from frontend. |
 | **GET** | `/products` | Query: `page` (default 1), `limit` (default 20, max 100), `categoryId`, `search`, `sort` (`rank`/`amount`/`newest`), `period` (`all`/`today`) | `{ "data": [Product], "pagination": { "page", "limit", "total", "totalPages" } }` | Paginated product list. Filter by category, search by name/url/description. `sort=rank` orders by `currentAmount DESC, createdAt ASC`. `period=today` filters to IST calendar day. |
 | **GET** | `/products/top` | Query: `limit` (default 3, max 20) | `[ { "rank": 1, "id", "websiteName", "websiteUrl", "description", "logoUrl", "currentAmount", "currency", "category": { "id", "name" } } ]` | Top N products for homepage leaderboard. |
-| **GET** | `/products/:id` | — | `{ "id", "websiteName", "websiteUrl", "description", "logoUrl", "faviconUrl", "category": { "id", "name" }, "currentAmount", "currency", "categoryRank", "allTimeRank", "clickCount", "totalBids", "createdAt", "updatedAt" }` | Single product detail page. |
-| **POST** | `/products/:id/click` | — | `{ "clickCount": 123 }` | Atomically increments click count. No body needed. |
-| **GET** | `/categories` | — | `[ { "id": 1, "name": "AI Agents & Infrastructure", "productCount": 25, "highestAmount": 17000 }, ... ]` | All 15 categories with live product counts and highest paid amount. |
-| **GET** | `/stats` | — | `{ "totalCollected": 1360657, "currency": "INR", "totalProducts": 245, "totalPayments": 912, "totalCategories": 15, "activeProducts": 240 }` | Platform-wide statistics. |
-| **GET** | `/stats/total-collected` | — | `{ "totalAmount": 1360657, "currency": "INR" }` | Total successfully collected revenue. |
-| **GET** | `/home` | — | `{ "stats": { "totalCollected", "totalProducts" }, "topProducts": [TopProduct], "categories": [Category], "todayTopProducts": [TopProduct] }` | Single homepage API. Returns stats, top products, categories, and today's top. |
+| **GET** | `/products/:id` | - | `{ "id", "websiteName", "websiteUrl", "description", "logoUrl", "faviconUrl", "category": { "id", "name" }, "currentAmount", "currency", "categoryRank", "allTimeRank", "clickCount", "totalBids", "createdAt", "updatedAt" }` | Single product detail page. |
+| **POST** | `/products/:id/click` | - | `{ "clickCount": 123 }` | Atomically increments click count. No body needed. |
+| **GET** | `/categories` | - | `[ { "id": 1, "name": "AI Agents & Infrastructure", "productCount": 25, "highestAmount": 17000 }, ... ]` | All 15 categories with live product counts and highest paid amount. |
+| **GET** | `/stats` | - | `{ "totalCollected": 1360657, "currency": "INR", "totalProducts": 245, "totalPayments": 912, "totalCategories": 15, "activeProducts": 240 }` | Platform-wide statistics. |
+| **GET** | `/stats/total-collected` | - | `{ "totalAmount": 1360657, "currency": "INR" }` | Total successfully collected revenue. |
+| **GET** | `/home` | - | `{ "stats": { "totalCollected", "totalProducts" }, "topProducts": [TopProduct], "categories": [Category], "todayTopProducts": [TopProduct] }` | Single homepage API. Returns stats, top products, categories, and today's top. |
 
 ---
 
@@ -206,9 +206,9 @@ const options = {
 
 ## Notes
 
-- Do not send `currentAmount`, `categoryRank`, or `allTimeRank` from frontend — always read from API response.
+- Do not send `currentAmount`, `categoryRank`, or `allTimeRank` from frontend - always read from API response.
 - The `amount` you send to `create-order` is the exact amount charged via Razorpay.
 - There is no minimum bid. Any positive integer is accepted.
 - Website metadata (name, description, logo) is fetched automatically by the backend after payment.
 - Duplicate URLs update the existing product's amount, not create a new one.
-- Webhook (`/payments/webhook`) is for Razorpay server-to-server only — do not call from frontend.
+- Webhook (`/payments/webhook`) is for Razorpay server-to-server only - do not call from frontend.

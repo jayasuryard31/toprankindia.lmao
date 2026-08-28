@@ -65,7 +65,7 @@ export default function GameMode({ engine, onExit, onOutbidSuccess }) {
       alive = false;
       ctrl.onState = () => {};
       engine.setGameHook(null);
-      ctrl.dispose(); // synchronous teardown — safe under StrictMode double-mount
+      ctrl.dispose(); // synchronous teardown - safe under StrictMode double-mount
       if (ctrlRef.current === ctrl) ctrlRef.current = null;
       if (document.pointerLockElement) document.exitPointerLock();
     };

@@ -14,7 +14,7 @@ function themeForClock() {
  * Theme is CLOCK-DRIVEN, not sticky.
  *
  * The site (and the 3D city with it) goes dark on its own at night and light
- * again in the morning — the user never has to think about it. A manual toggle
+ * again in the morning - the user never has to think about it. A manual toggle
  * still wins, but only until the next phase boundary, so "switch to dark at
  * night automatically" keeps working for someone who flipped to light at noon.
  */
@@ -30,7 +30,7 @@ export function ThemeProvider({ children }) {
     return themeForClock();
   });
 
-  // The phase the current value was decided in — used to expire overrides.
+  // The phase the current value was decided in - used to expire overrides.
   const phaseRef = useRef(currentTimeOfDay());
   const manualRef = useRef(false);
 

@@ -46,7 +46,7 @@ export default function Header() {
     return location.pathname.startsWith(path);
   };
 
-  // Walking the city is a full-screen experience — the site chrome would sit
+  // Walking the city is a full-screen experience - the site chrome would sit
   // on top of the game HUD, so it unmounts for the duration.
   if (inCity) return null;
 

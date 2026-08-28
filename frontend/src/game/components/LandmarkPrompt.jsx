@@ -6,7 +6,7 @@ import { IconX, IconSparkle, IconArrowUpRight } from "../../components/common/Ic
 /**
  * In-world info panel for a brand building or a city billboard.
  *
- * This is deliberately NOT a full-screen modal — it is a compact card pinned
+ * This is deliberately NOT a full-screen modal - it is a compact card pinned
  * beside the player's head in screen space, so reading it never takes you out
  * of the world. `anchor` is {x, y, visible} from engine.getProjectedPoint().
  */
@@ -39,7 +39,7 @@ export default function LandmarkPrompt({ landmark, anchor, onClose }) {
 
   return (
     <>
-      {/* click-away catcher — transparent, keeps the world visible */}
+      {/* click-away catcher - transparent, keeps the world visible */}
       <div className="absolute inset-0 z-40 pointer-events-auto" onClick={onClose} />
 
       {/* leader line from the player's head to the card */}

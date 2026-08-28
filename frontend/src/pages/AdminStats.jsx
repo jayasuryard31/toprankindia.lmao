@@ -16,7 +16,7 @@ import {
 } from "../components/common/Icons";
 
 /**
- * /admin/stats/:code — a private operations dashboard, not a page anyone
+ * /admin/stats/:code - a private operations dashboard, not a page anyone
  * links to. The URL segment is forwarded as a header to the backend and
  * checked against `process.env.SECRET_CODE` there; nothing here decides
  * whether the code is right, so the real secret never ships in this bundle.
@@ -40,7 +40,7 @@ const timeAgo = (iso) => {
   return `${Math.floor(s / 86400)}d ago`;
 };
 
-/** Flag emoji from an ISO 3166-1 alpha-2 code — no icon assets needed. */
+/** Flag emoji from an ISO 3166-1 alpha-2 code - no icon assets needed. */
 function flagFor(code) {
   if (!code || code === "XX" || code.length !== 2) return "🌐";
   const A = 0x1f1e6;
@@ -208,7 +208,7 @@ export default function AdminStats() {
 
       {/* ── Bento grid ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-min">
-        {/* Payments — wide */}
+        {/* Payments - wide */}
         <Card className="sm:col-span-2 lg:col-span-2">
           <CardHeader icon={IconWallet} title="Payments" sub="Plots + billboard bookings, PAID only" />
           <div className="grid grid-cols-2 gap-4 mb-4">
@@ -274,7 +274,7 @@ export default function AdminStats() {
               .map((b) => (
                 <span
                   key={b.code}
-                  title={`${b.name} — ${b.brand}`}
+                  title={`${b.name} - ${b.brand}`}
                   className="px-2 py-0.5 rounded-full bg-surface-soft dark:bg-elevated text-[10px] font-mono text-muted"
                 >
                   #{b.number}
@@ -286,7 +286,7 @@ export default function AdminStats() {
           </div>
         </Card>
 
-        {/* Leaderboard — tall */}
+        {/* Leaderboard - tall */}
         <Card className="lg:row-span-2">
           <CardHeader icon={IconTrophy} title="Leaderboard" sub="Top brands by bid" />
           <div className="flex-1 overflow-y-auto max-h-[26rem] scrollbar-hide space-y-2">
@@ -323,7 +323,7 @@ export default function AdminStats() {
           </div>
         </Card>
 
-        {/* Country breakdown — wide */}
+        {/* Country breakdown - wide */}
         <Card className="sm:col-span-2 lg:col-span-2">
           <CardHeader icon={IconGlobe} title="Visitors by Country" sub={`${s.traffic.totalVisits30d} visits in the last 30 days`} />
           <div className="space-y-2 flex-1">

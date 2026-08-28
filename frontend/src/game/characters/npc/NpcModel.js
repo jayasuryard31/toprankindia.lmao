@@ -5,7 +5,7 @@ import * as THREE from "three";
  *
  * Builds highly detailed, expressive, and distinct humanoid characters
  * with rich clothing archetypes, hairstyles, hats, glasses, backpacks,
- * and accessories — ensuring every NPC is unique from each other and
+ * and accessories - ensuring every NPC is unique from each other and
  * distinct from the player character.
  */
 

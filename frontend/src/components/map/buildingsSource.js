@@ -49,7 +49,7 @@ function buildingHeight(weight, rank) {
   return Math.round(42 + Math.sqrt(clamp(weight, 0.01, 1)) * 270);
 }
 
-/** Physical 3D land footprint half-size (degrees) — expands with bigger payment */
+/** Physical 3D land footprint half-size (degrees) - expands with bigger payment */
 function footprintHalf(weight) {
   const normalized = clamp(weight, 0.005, 1);
   return 0.0004 + Math.pow(normalized, 0.48) * 0.0036;

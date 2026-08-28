@@ -14,7 +14,7 @@ const TUNING = {
   decel: 34,
   airControl: 0.35,
   gravity: 26,
-  // apex ≈ v²/2g ≈ 1.56m — comfortably clears the 1.35m plot fences
+  // apex ≈ v²/2g ≈ 1.56m - comfortably clears the 1.35m plot fences
   jumpVelocity: 9.0,
   fallMult: 1.75, // fall faster than you rise
   lowJumpMult: 2.6, // released jump early -> shorter hop
@@ -66,7 +66,7 @@ export class PlayerController {
   /**
    * @param dt        seconds
    * @param input     { forward, back, left, right, sprint, crouch, jumpPressed }
-   * @param camYaw    camera yaw (radians) — movement is relative to this
+   * @param camYaw    camera yaw (radians) - movement is relative to this
    */
   update(dt, input, camYaw) {
     this.invulnerableTimer = Math.max(0, this.invulnerableTimer - dt);
@@ -213,7 +213,7 @@ export class PlayerController {
       this.jumpedThisFrame = false;
     }
     // Snappier arc: fall faster than you rise, and cut the rise if the key is
-    // released early — the classic platformer feel.
+    // released early - the classic platformer feel.
     const gScale = this.vy > 0 ? (input.jumpHeld ? 1 : TUNING.lowJumpMult) : TUNING.fallMult;
     this.vy -= TUNING.gravity * gScale * dt;
 
@@ -224,7 +224,7 @@ export class PlayerController {
 
     // If we already overlap something (landed on a rail, a car drove into us,
     // a building just grew) push straight back out along the shallowest axis
-    // instead of freezing — being stuck inside geometry is never acceptable.
+    // instead of freezing - being stuck inside geometry is never acceptable.
     this._depenetrate(solids, dyn);
 
     let nx = this.pos.x + this.vel.x * dt;
@@ -483,7 +483,7 @@ export class PlayerController {
     const r = TUNING.radius;
     const feet = this.pos.y;
     // Anything whose top is below the player's feet (+ step height) is walked
-    // over, not into — so kerbs and low rails never snag you, and you can
+    // over, not into - so kerbs and low rails never snag you, and you can
     // clear a fence or a car roof if you actually jumped that high.
     const clearBelow = feet + TUNING.stepHeight;
 

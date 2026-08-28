@@ -1,5 +1,5 @@
 /**
- * towerFactory.js — procedural PBR skyscrapers, no external assets.
+ * towerFactory.js - procedural PBR skyscrapers, no external assets.
  *
  * All facades are CanvasTexture window grids (colour + emissive for the
  * dusk window-glow). Textures are generated once and shared by every tower.
@@ -254,7 +254,7 @@ export function makeTower({ w, d, h, tier = "standard", accentHex = 0xffffff, se
     }
   }
 
-  // ── #1 CROWN TREATMENT — grand realistic architectural golden crown ────────
+  // ── #1 CROWN TREATMENT - grand realistic architectural golden crown ────────
   if (tier === "crown") {
     const crownGroup = new THREE.Group();
     crownGroup.name = "rank1-golden-crown";

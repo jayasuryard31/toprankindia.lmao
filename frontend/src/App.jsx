@@ -9,7 +9,7 @@ import Header from "./components/layout/Header";
 import Footer from "./components/layout/Footer";
 import { trackVisit } from "./services/adminApi";
 
-// Route-level code splitting — keeps the ~600KB three.js + city engine out of
+// Route-level code splitting - keeps the ~600KB three.js + city engine out of
 // the initial bundle and off every non-map route.
 const Home = lazy(() => import("./pages/Home"));
 const ProductDetails = lazy(() => import("./pages/ProductDetails"));
@@ -17,7 +17,7 @@ const Categories = lazy(() => import("./pages/Categories"));
 const CategoryDetails = lazy(() => import("./pages/CategoryDetails"));
 const About = lazy(() => import("./pages/About"));
 const NotFound = lazy(() => import("./pages/NotFound"));
-// Private ops dashboard — never linked from the public site, gets its own
+// Private ops dashboard - never linked from the public site, gets its own
 // bundle so it never adds weight to a normal visit.
 const AdminStats = lazy(() => import("./pages/AdminStats"));
 
@@ -37,7 +37,7 @@ function RouteFallback() {
 
 /**
  * The admin dashboard is a standalone operations screen, not a page in the
- * public site — it gets no Header/Footer chrome, and its own visits are
+ * public site - it gets no Header/Footer chrome, and its own visits are
  * excluded from the traffic beacon (an admin checking the dashboard
  * shouldn't count as, or pollute, the audience data it's showing).
  */

@@ -1,5 +1,5 @@
 /**
- * The "stop looking at the city — enter it" CTA. Sits above the map surface.
+ * The "stop looking at the city - enter it" CTA. Sits above the map surface.
  */
 export default function EnterCityButton({ onClick, hidden }) {
   if (hidden) return null;

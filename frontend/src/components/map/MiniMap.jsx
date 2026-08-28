@@ -7,7 +7,7 @@ import CityMiniMap from "./CityMiniMap";
  * completely separate fake lng/lat city and could never match).
  */
 export default function MiniMap() {
-  // The engine is created by MapCanvas, which may mount after this panel —
+  // The engine is created by MapCanvas, which may mount after this panel -
   // poll briefly so the overview never gets stuck on a null reference.
   const [engine, setEngine] = useState(() =>
     typeof window !== "undefined" ? window.__threeCityEngine : null

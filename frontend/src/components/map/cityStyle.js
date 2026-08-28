@@ -5,7 +5,7 @@
  * `load` immediately and reliably; every GeoJSON source and layer is added
  * afterwards via `addCityLayers()`. District labels are HTML overlays.
  *
- * Light and dark are two hand-tuned cartographic palettes — never a CSS filter.
+ * Light and dark are two hand-tuned cartographic palettes - never a CSS filter.
  */
 
 export const PALETTES = {

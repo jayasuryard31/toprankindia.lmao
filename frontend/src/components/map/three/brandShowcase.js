@@ -111,7 +111,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
   // inventory of the crossroads is what you see below.
   //
   // Three deliberate rules, all learned from walking it in third person:
-  //   1. `mount: "facade"` / `"folded"` dominate — a forest of roadside pylons
+  //   1. `mount: "facade"` / `"folded"` dominate - a forest of roadside pylons
   //      looked nothing like the real place. Only two poles survive.
   //   2. Elevations stay between 7m and 34m. Anything higher is invisible to a
   //      character standing on the plaza, which defeats the point of it.
@@ -123,7 +123,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
   // narrow street) or 20 (east/west, wide avenue) lands a panel flat against the
   // building wall opposite, facing back into the square.
 
-  // North frontage — the big landscape pair over the crossing
+  // North frontage - the big landscape pair over the crossing
   {
     billboardNumber: 11,
     id: "bb_ts_north_marquee",
@@ -154,7 +154,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     anchor: "times",
     getPos: (p) => ({ x: p.cx + 34, z: p.z0 - 16, yaw: 0 }),
   },
-  // North frontage — a tall portrait poster between them
+  // North frontage - a tall portrait poster between them
   {
     billboardNumber: 13,
     id: "bb_ts_north_portrait",
@@ -218,7 +218,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     getPos: (p) => ({ x: p.cx - 46, z: p.z1 + 16, yaw: Math.PI }),
   },
 
-  // East frontage — including a folded corner wrap
+  // East frontage - including a folded corner wrap
   {
     billboardNumber: 17,
     id: "bb_ts_east_corner",
@@ -265,7 +265,7 @@ export const CITY_BILLBOARD_LOCATIONS = [
     getPos: (p) => ({ x: p.x1 + 20, z: p.cz + 42, yaw: -Math.PI / 2 }),
   },
 
-  // West frontage — the other corner wrap
+  // West frontage - the other corner wrap
   {
     billboardNumber: 20,
     id: "bb_ts_west_corner",
@@ -850,7 +850,7 @@ export function makeBrandRoofMesh({ product = {}, rank = 1, color = "#F05A38", w
  * Returns a `tick(t, dt)` you attach to the billboard group's userData.
  */
 function attachLiveScreen({ canvas, ctx, texture, width, height, brand, websiteUrl, color, claimed, costText }) {
-  // Logical drawing space — matches whatever aspect the panel was authored at
+  // Logical drawing space - matches whatever aspect the panel was authored at
   // (landscape 512×288 or portrait 288×512).
   const W = width || 512;
   const H = height || 288;
@@ -955,10 +955,10 @@ function attachLiveScreen({ canvas, ctx, texture, width, height, brand, websiteU
  * A city billboard: the canvas artwork plus the physical structure it hangs on.
  *
  * Two things drive the shape:
- *   • `orientation` — "landscape" (wide) or "portrait" (tall). The artwork is
+ *   • `orientation` - "landscape" (wide) or "portrait" (tall). The artwork is
  *     laid out proportionally, so a portrait board is a real vertical poster,
  *     not a squashed wide one.
- *   • `mount` — how it attaches to the world:
+ *   • `mount` - how it attaches to the world:
  *       "facade"  flat on a building wall, no supporting structure at all
  *       "folded"  two panels meeting in a shallow V, wrapping a corner
  *       "gantry"  two legs straddling a plaza
@@ -1065,7 +1065,7 @@ export function makeCityBillboard({ billboardDef, product, billboardRecord }) {
     ctx.fillText(`${isClaimed ? "Fixed Rate" : "Fixed Cost"}: ${costText}`, W - PAD - 14, 37);
   }
 
-  // CTA bar geometry — the ticker (added by attachLiveScreen) owns the last
+  // CTA bar geometry - the ticker (added by attachLiveScreen) owns the last
   // ~30px, so the bar is parked just above it in both orientations.
   const ctaH = 54;
   const ctaY = H - ctaH - 20;
@@ -1228,7 +1228,7 @@ export function makeCityBillboard({ billboardDef, product, billboardRecord }) {
     box.castShadow = true;
     panel.add(box);
 
-    // hairline accent border — four thin bars, so bloom reads as an edge glow
+    // hairline accent border - four thin bars, so bloom reads as an edge glow
     const edgeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colorHex) });
     const T = 0.28;
     [
@@ -1298,7 +1298,7 @@ export function makeCityBillboard({ billboardDef, product, billboardRecord }) {
     g.add(base);
   }
 
-  // Housing spotlights — small, and only on structures that really have them.
+  // Housing spotlights - small, and only on structures that really have them.
   if (mount !== "facade" && mount !== "folded") {
     for (let i = -1; i <= 1; i += 2) {
       const lampArm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.4, 8), steelMat);
@@ -1373,7 +1373,7 @@ export function makeCityBillboard({ billboardDef, product, billboardRecord }) {
 
 
 // ────────────────────────────────────────────────────────────────────────
-// FACADE BILLBOARD — a giant ad mounted FLAT ON the building's wall
+// FACADE BILLBOARD - a giant ad mounted FLAT ON the building's wall
 // (Times-Square style), proving who owns the tower.
 // ────────────────────────────────────────────────────────────────────────
 

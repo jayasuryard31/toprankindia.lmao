@@ -1,5 +1,5 @@
 /**
- * cityProps.js — reusable detailed procedural meshes & textures.
+ * cityProps.js - reusable detailed procedural meshes & textures.
  * Everything here is self-contained (canvas textures, box/lathe geometry).
  */
 import * as THREE from "three";
@@ -135,7 +135,7 @@ export function makeTreeField(positions, { pineRatio = 0.15 } = {}) {
 export const carColors = [0xe23b2e, 0x2f6fdb, 0xf4c542, 0xf2f2f2, 0x12a150, 0x8b3fd6, 0x2a2f38, 0xd98032];
 
 /**
- * Instanced traffic fleet — visually identical to a pile of makeCar() groups
+ * Instanced traffic fleet - visually identical to a pile of makeCar() groups
  * but ~3 draw calls instead of ~6 per vehicle. `specs` = [{ len, wid, bus,
  * colorHex }]. Returns { group, setCar(i,x,z,rotY), dispose }.
  */
@@ -225,7 +225,7 @@ export function createTrafficFleet(specs) {
     const bodyY = s.bus ? 0.42 : 0.3; // baked geometry sits on its own base
     place(s.bus ? busMesh : carMesh, i, x, bodyY, z, s.wid, bodyH, s.len);
 
-    // greenhouse / window band — inset into the body's upper volume, never
+    // greenhouse / window band - inset into the body's upper volume, never
     // floating on top of it
     if (s.bus) {
       place(glassMesh, i, x, bodyY + bodyH * 0.56, z, s.wid * 1.008, bodyH * 0.3, s.len * 0.9);
@@ -557,7 +557,7 @@ const LEG_TONES = ["#2f3f6e", "#33373d", "#4a4034", "#5a5f68", "#243044"];
 const HAIR_TONES = ["#241a13", "#4b2f21", "#12100f", "#7a5230", "#8f8b86"];
 
 /**
- * NPC crowd — proper little people (head, hair, torso, two arms, two legs)
+ * NPC crowd - proper little people (head, hair, torso, two arms, two legs)
  * instead of bare capsules. Six InstancedMeshes total, so a few hundred
  * pedestrians still cost ~6 draw calls.
  *
@@ -693,7 +693,7 @@ export function createFountain({ radius = 16, dark = false } = {}) {
     transparent: true,
     opacity: 0.88,
   });
-  // falling / jetting water — bright, additive, unlit
+  // falling / jetting water - bright, additive, unlit
   const jetMat = new THREE.MeshBasicMaterial({
     color: 0xdff3ff,
     transparent: true,
@@ -1022,7 +1022,7 @@ export function grassNormal(tex) {
   return normalFromCanvas(tex.userData.canvas, 1.1);
 }
 
-/** Soft round cloud puff on transparent canvas — for drifting sky planes. */
+/** Soft round cloud puff on transparent canvas - for drifting sky planes. */
 export function cloudTexture(seed = 1) {
   const r = mulberry(seed);
   const cv = document.createElement("canvas");
@@ -1168,7 +1168,7 @@ export function sandTexture() {
   ctx.fillStyle = "#e3cb9b";
   ctx.fillRect(0, 0, S, S);
 
-  // wind ripples — crisp parallel bands with a slow wave
+  // wind ripples - crisp parallel bands with a slow wave
   for (let y = 0; y < S; y += 5) {
     ctx.strokeStyle = `rgba(196,168,120,${0.16 + Math.random() * 0.14})`;
     ctx.lineWidth = 1 + Math.random();

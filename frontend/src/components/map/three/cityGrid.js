@@ -1,5 +1,5 @@
 /**
- * cityGrid.js — the single spatial source of truth for the Three.js city.
+ * cityGrid.js - the single spatial source of truth for the Three.js city.
  *
  * A well-planned rectilinear grid, Manhattan/Barcelona style:
  *   - Avenues run North <-> South  (long axis = world Z)
@@ -40,11 +40,11 @@ const CITY_D = (GRID.ROWS - 1) * GRID.STREET_SPACING;
 const HALF_W = CITY_W / 2;
 const HALF_D = CITY_D / 2;
 
-// Central roundabout plaza — a reserved patch of blocks at the middle.
+// Central roundabout plaza - a reserved patch of blocks at the middle.
 const PLAZA = { c0: 2, c1: 4, r0: 8, r1: 10 };
-// Central Park — a tall reserved rectangle just west of the plaza.
+// Central Park - a tall reserved rectangle just west of the plaza.
 const PARK = { c0: 0, c1: 1, r0: 6, r1: 12 };
-// Times Square heart — the crossroads block stays open as a pedestrian plaza
+// Times Square heart - the crossroads block stays open as a pedestrian plaza
 // ringed by mega-screens. Kept far from PARK so the two never read as one place.
 const TIMES_SQUARE = { c0: 4, c1: 5, r0: 15, r1: 16 };
 
@@ -156,7 +156,7 @@ export function lotForRank(rank) {
 }
 
 /**
- * THE crown lot — the single most central buildable lot in the whole city,
+ * THE crown lot - the single most central buildable lot in the whole city,
  * hugging the central roundabout. Rank #1 always lands here so the top-paid
  * landmark literally stands at the heart of the metropolis.
  */
@@ -181,7 +181,7 @@ export function crownLot() {
   return best;
 }
 
-/** A prominent lot near a district's centre — used for the hero (top-rank) tower. */
+/** A prominent lot near a district's centre - used for the hero (top-rank) tower. */
 export function districtPrimeLot(d) {
   const bcx = Math.round((d.c[0] + d.c[1]) / 2);
   const bcz = Math.round((d.r[0] + d.r[1]) / 2);

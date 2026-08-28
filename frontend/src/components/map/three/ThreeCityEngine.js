@@ -72,7 +72,7 @@ import { NpcSystem } from "../../../game/systems/npc/NpcSystem.js";
 import { TrafficLightSystem } from "../../../game/systems/traffic/TrafficLightSystem.js";
 
 /**
- * TOPRANKINDIA — planned 3D metropolis engine.
+ * TOPRANKINDIA - planned 3D metropolis engine.
  *
  * Spatial truth lives in cityGrid.js: an avenue/street grid carved into blocks,
  * each block subdivided into lots with a sidewalk setback and grouped into named
@@ -97,7 +97,7 @@ export class ThreeCityEngine {
     this.options = options;
 
     // The city and the site chrome are ALWAYS in the same mode. `uiTheme` is
-    // the master switch (itself clock-driven — see ThemeContext), and the wall
+    // the master switch (itself clock-driven - see ThemeContext), and the wall
     // clock only chooses which *light* look to use: midday sun or golden hour.
     this.uiTheme = options.theme || "light";
     this.tod = this._resolveTod();
@@ -109,6 +109,7 @@ export class ThreeCityEngine {
     this.renderer = null;
     this.animFrameId = null;
     this._lastTime = typeof performance !== "undefined" ? performance.now() : Date.now();
+    this._fps = 60;
 
     this.target = new THREE.Vector3(0, 0, 0);
     this.spherical = new THREE.Spherical(2050, Math.PI / 3.5, Math.PI * 0.18);
@@ -159,11 +160,11 @@ export class ThreeCityEngine {
 
     this.scene = new THREE.Scene();
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    this.renderer = new THREE.WebGLRenderer({ antialias: false });
     this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    // this.renderer.shadowMap.enabled = true;
+    // this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = this.atmo.exposure;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -215,8 +216,8 @@ export class ThreeCityEngine {
    * sky, light, ground, the road grid and the skyline. It is what the first
    * frame shows.
    *
-   * Everything else — the park, the square, the coast, street furniture,
-   * traffic and ~350 pedestrians — is queued and built one chunk per idle
+   * Everything else - the park, the square, the coast, street furniture,
+   * traffic and ~350 pedestrians - is queued and built one chunk per idle
    * slice. Building it all up front is what made "Enter City" feel like the
    * tab had hung: several hundred procedural models and a dozen canvas
    * textures on one blocking call. Queued, the map is interactive in a single
@@ -246,7 +247,12 @@ export class ThreeCityEngine {
       () => this.buildTimesSquare(),
       () => { this.buildCoastline(); this.buildGreenbelt(); },
       () => this.buildTreesAndProps(),
-      () => { this.buildTraffic(); this.trafficLightSystem = new TrafficLightSystem(this); },
+      () => {
+        this.buildTraffic();
+        this.trafficLightSystem = new TrafficLightSystem(this);
+        // every Water surface exists by now (coastline + greenbelt + park pond)
+        this._throttleWaterReflections();
+      },
       () => { this.railway = new RailwaySystem(this); },
       () => { this.npcSystem = new NpcSystem(this); },
     ];
@@ -275,6 +281,7 @@ export class ThreeCityEngine {
         console.error("[ThreeCityEngine] build step failed:", err);
       }
       this.invalidateSolids();
+      this.postfx?.invalidate();
       this.onProjectUpdate();
       this._pumpBuildQueue();
     };
@@ -294,7 +301,7 @@ export class ThreeCityEngine {
 
   /**
    * Finish the deferred build right now. Called before anything that needs a
-   * complete world — walking into the city needs its colliders, its traffic
+   * complete world - walking into the city needs its colliders, its traffic
    * and its crowds present, not arriving a beat later.
    */
   ensureBuilt() {
@@ -538,7 +545,7 @@ export class ThreeCityEngine {
     ctx.fillStyle = isDark ? "#15181e" : "#3b4048";
     ctx.fillRect(0, 0, S, S);
 
-    // aggregate — thousands of individually visible stones
+    // aggregate - thousands of individually visible stones
     for (let i = 0; i < 26000; i++) {
       const g = Math.random();
       const shade = isDark ? 26 + g * 40 : 62 + g * 74;
@@ -695,7 +702,7 @@ export class ThreeCityEngine {
       line.userData.bloom = true;
       this.environmentGroup.add(line);
 
-      // painted district boundary line — flush with the ground
+      // painted district boundary line - flush with the ground
       const kerb = new THREE.Mesh(
         new THREE.PlaneGeometry(w, 1.1),
         new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.5, depthWrite: false })
@@ -711,12 +718,47 @@ export class ThreeCityEngine {
 
   // ── Central Fountain Botanical Park & Plaza ───────────────────────────
   /**
-   * Victorian double-globe lamp post — the park/plaza street furniture.
+   * Victorian double-globe lamp post - the park/plaza street furniture.
    * Shares MAT.lampGlobe so the city clock can dim every globe at once, and
    * registers itself as a collider so the player can't walk through the pole.
    *
    * `scale` > 1 gives the taller Times Square variant.
    */
+  /**
+   * three.js `Water` re-renders the ENTIRE scene into a reflection target from
+   * its own onBeforeRender. Measured on an M1: three water surfaces (ocean,
+   * park pond, greenbelt river) cost 78ms of a 90ms frame - 87% of the whole
+   * render - because that is three extra full-scene renders. With post-processing
+   * on it is SIX, since the bloom composer and the final composer each trigger
+   * them.
+   *
+   * Two observations make this nearly free to fix, with no visual change:
+   *   1. During the bloom pass every water surface is swapped to a flat black
+   *      material, so the reflection it just computed is thrown away. Skip it.
+   *   2. Water is rippling, normal-mapped and distorted. A reflection refreshed
+   *      every 3rd frame is indistinguishable from one refreshed every frame,
+   *      and the three surfaces are staggered so only one updates per frame.
+   */
+  _throttleWaterReflections() {
+    // 6 with three staggered surfaces = one reflection render every other
+    // frame, rather than three every frame. The water's own normal-map
+    // animation still advances every frame, so the surface never looks frozen;
+    // only the reflected image (an essentially static skyline) refreshes slower.
+    const EVERY = 6;
+    this.waters.forEach((w, i) => {
+      if (w.userData._reflectThrottled) return;
+      w.userData._reflectThrottled = true;
+      const orig = w.onBeforeRender;
+      let n = i; // stagger: at most one surface refreshes on any given frame
+      w.onBeforeRender = (...args) => {
+        // postfx marks the bloom pass; water is black there, reflection unused
+        if (this.scene.userData.bloomPass) return;
+        if (n++ % EVERY !== 0) return;
+        orig.apply(w, args);
+      };
+    });
+  }
+
   makeVictorianLamp(x, z, { yaw = 0, scale = 1, collide = true } = {}) {
     const poleMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1e, roughness: 0.5, metalness: 0.7 });
     const lamp = new THREE.Group();
@@ -785,7 +827,7 @@ export class ThreeCityEngine {
 
   makeArchedGateSignTexture(title = "VELORA CENTRAL PARK") {
     // 2048×512 so the lettering stays razor-sharp when you stand under the
-    // arch. Text is set STRAIGHT on an arched plaque — per-letter rotation
+    // arch. Text is set STRAIGHT on an arched plaque - per-letter rotation
     // along a curve was what made the old sign hard to read.
     const W = 2048;
     const H = 512;
@@ -1372,7 +1414,7 @@ export class ThreeCityEngine {
       });
     }
 
-    // 8. Victorian Double-Globe Lamp Posts — dense enough that every walkway,
+    // 8. Victorian Double-Globe Lamp Posts - dense enough that every walkway,
     // radial avenue and diagonal is actually lit end to end after dark.
     for (let i = 0; i < 32; i++) {
       const a = (i / 32) * Math.PI * 2 + 0.15;
@@ -1494,7 +1536,7 @@ export class ThreeCityEngine {
   }
 
   // ── Central Park ─────────────────────────────────────────────────────
-  // One shared 256² normal map for every Water surface (pond, ocean, rivers) —
+  // One shared 256² normal map for every Water surface (pond, ocean, rivers) -
   // they still look distinct via per-surface distortionScale / colour.
   makeWaterNormals() {
     if (this._waterNormals) return this._waterNormals;
@@ -1546,9 +1588,9 @@ export class ThreeCityEngine {
   }
 
 
-  // ── Times Square — the neon crossroads, deliberately far from the park ──
+  // ── Times Square - the neon crossroads, deliberately far from the park ──
   // The whole square (sign wall, shopfronts, landmark stack, plaza furniture,
-  // street clutter and the standing crowd) lives in timesSquare.js — it is a
+  // street clutter and the standing crowd) lives in timesSquare.js - it is a
   // big enough piece of authored place to be worth its own module.
   buildTimesSquare() {
     buildTimesSquareScene(this);
@@ -1755,7 +1797,7 @@ export class ThreeCityEngine {
     const o = ocean();
 
     const sea = new Water(new THREE.PlaneGeometry(o.w * 2.2, o.depthSpan), {
-      textureWidth: 1024, textureHeight: 1024,
+      textureWidth: 512, textureHeight: 512,
       waterNormals: this.makeWaterNormals(),
       sunDirection: this.sunVec.clone(),
       sunColor: isDark ? 0x8098c0 : 0x9fb4c4,
@@ -1953,7 +1995,7 @@ export class ThreeCityEngine {
         ctx.fillStyle = `rgba(${140 + v},${138 + v},${134 + v},0.06)`;
         ctx.fillRect(Math.random() * S, Math.random() * S, 1.6, 1.6);
       }
-      // horizontal floor slabs — the strongest real-world cue
+      // horizontal floor slabs - the strongest real-world cue
       ctx.fillStyle = isDark ? "rgba(12,14,18,0.55)" : "rgba(96,92,86,0.4)";
       for (let r = 0; r <= rows; r++) ctx.fillRect(0, r * ch - 1.5, S, 3);
     }
@@ -2020,7 +2062,7 @@ export class ThreeCityEngine {
     // ── Occupancy budget ───────────────────────────────────────────────
     // Every block keeps AT MOST 1–2 pre-built structures. The remaining lots
     // stay genuinely empty so a player can walk up and claim them. Times
-    // Square is the one exception — it is meant to feel wall-to-wall dense.
+    // Square is the one exception - it is meant to feel wall-to-wall dense.
     const isTimesSquare = arche === "timessquare";
     const budget = isTimesSquare
       ? lots.length
@@ -2080,7 +2122,7 @@ export class ThreeCityEngine {
         };
       }
 
-      // residential — a house or two per block, rest is open yard
+      // residential - a house or two per block, rest is open yard
       return {
         fill,
         kind: "house",
@@ -2196,7 +2238,7 @@ export class ThreeCityEngine {
   /**
    * The pre-built (non-brand) building standing on the lot nearest (x, z), if
    * any. Every existing structure has a FIXED asking price derived from its
-   * size — walk up to one and you can simply buy it outright.
+   * size - walk up to one and you can simply buy it outright.
    */
   getPrebuiltAt(x, z, radius = 12) {
     if (!this.fillerSlots) return null;
@@ -2336,7 +2378,7 @@ export class ThreeCityEngine {
   buildTraffic() {
     const segs = this._roadSegs || roadSegments();
     const specs = [];
-    this.trafficCars = []; // logical state only — geometry is the instanced fleet
+    this.trafficCars = []; // logical state only - geometry is the instanced fleet
 
     let seed = 3;
     const rnd = () => {
@@ -2344,7 +2386,7 @@ export class ThreeCityEngine {
       return seed / 233280;
     };
     const MAX_CARS = 300; // dense enough that every avenue has moving traffic
-    // Times Square is the busiest crossroads in the city — anything running
+    // Times Square is the busiest crossroads in the city - anything running
     // through (or alongside) the square carries roughly triple the traffic of
     // an ordinary block.
     const ts = timesSquareRect();
@@ -2373,7 +2415,7 @@ export class ThreeCityEngine {
         const bus = i % 13 === 0;
         const carLen = bus ? 13 : 5.4 + rnd() * 1.4;
         const carWid = bus ? 3 : 2.5;
-        // Around Times Square most of the traffic is cabs — it is a big part
+        // Around Times Square most of the traffic is cabs - it is a big part
         // of why the real crossroads reads yellow from above.
         const cab = !bus && busy && rnd() < 0.72;
         const colorHex = bus
@@ -2443,7 +2485,7 @@ export class ThreeCityEngine {
     this.districtTotals = {};
     const placed = new Set();
     const nHeroes = DISTRICT_META.length;
-    // how tall the runner-up will be — the #1 is kept clearly above it
+    // how tall the runner-up will be - the #1 is kept clearly above it
     const runnerUpFloors = sorted[1]
       ? Math.max(MIN_BRAND_FLOORS, floorsForAmountINR(sorted[1].currentAmount || 0))
       : 0;
@@ -2568,7 +2610,7 @@ export class ThreeCityEngine {
       };
       // ── Giant billboard mounted FLAT ON the tower's wall ─────────────
       // Sized to the facade, repeated on all four faces so the owner is
-      // identifiable from any approach — this is the ownership proof.
+      // identifiable from any approach - this is the ownership proof.
       const isCrown = rank === 1;
       const panelW = footprint * (isCrown ? 0.92 : 0.86);
       const panelH = isCrown
@@ -2649,6 +2691,9 @@ export class ThreeCityEngine {
     });
 
     this._syncPlanTowers();
+    // Towers/billboards were just torn down and rebuilt - the bloom occluder
+    // cache is stale until this fires.
+    this.postfx?.invalidate();
   }
 
   /** Rebuild the heat field after any bid/ownership change. */
@@ -2853,7 +2898,7 @@ export class ThreeCityEngine {
     window.addEventListener("resize", this._onResize);
 
     // Entering / leaving the city unmounts the site header, which resizes the
-    // container without ever firing a window resize — watch the box directly.
+    // container without ever firing a window resize - watch the box directly.
     if (typeof ResizeObserver !== "undefined") {
       this._resizeObs = new ResizeObserver(() => this._onResize());
       this._resizeObs.observe(this.container);
@@ -2915,7 +2960,7 @@ export class ThreeCityEngine {
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
     // 1. Raycast against brand towers and building ownership boards.
-    // In 2D the towers themselves are not in the scene — the flat map's
+    // In 2D the towers themselves are not in the scene - the flat map's
     // footprints stand in for them and carry the same userData.
     const towerTargets =
       this.viewMode === "2D" && this.planTowersGroup
@@ -3410,7 +3455,7 @@ export class ThreeCityEngine {
     const step = () => {
       if (!this.introPlaying) return;
       const k = Math.min(1, (performance.now() - t0) / (duration * 1000));
-      // long slow ease — most of the travel happens early, settles gently
+      // long slow ease - most of the travel happens early, settles gently
       const e = 1 - Math.pow(1 - k, 3.2);
       this.target.lerpVectors(startTarget, endTarget, e);
       this.spherical.radius = THREE.MathUtils.lerp(startR, endR, e);
@@ -3447,7 +3492,7 @@ export class ThreeCityEngine {
   /**
    * Which of the three looks the city should be wearing.
    *
-   * Dark chrome always means a night city — that is the whole point of the
+   * Dark chrome always means a night city - that is the whole point of the
    * toggle. Light chrome means a lit city, and the clock picks midday sun vs.
    * golden hour; asked for light at 2am, it serves day rather than fighting
    * the user's explicit choice.
@@ -3471,7 +3516,7 @@ export class ThreeCityEngine {
   }
 
   /**
-   * The site's light/dark switch drives the CITY too — flipping to light with
+   * The site's light/dark switch drives the CITY too - flipping to light with
    * a dark city underneath was the bug. ThemeContext flips this on its own at
    * dusk and dawn, so this is also how the city goes dark at night.
    */
@@ -3489,7 +3534,7 @@ export class ThreeCityEngine {
 
   /**
    * Cheap poll (once a minute) so a session left open rolls from midday into
-   * golden hour on its own. Never rebuilds mid-walk or mid-intro — the swap is
+   * golden hour on its own. Never rebuilds mid-walk or mid-intro - the swap is
    * deferred until the player is back on the map.
    */
   _checkClock() {
@@ -3556,21 +3601,28 @@ export class ThreeCityEngine {
     this.buildAll();
     this.scene.add(this.environmentGroup, this.fillerGroup);
     this.syncProducts(products);
-    // theme rebuild wipes the scene — restore whatever view/overlay was active
+    // theme rebuild wipes the scene - restore whatever view/overlay was active
     if (this.viewMode === "2D") this._applyFlatten(true);
     if (this._heatOn) this._buildHeatmap();
+    this.postfx?.invalidate();
     this.onProjectUpdate();
   }
 
   animate() {
     this.animFrameId = requestAnimationFrame(() => this.animate());
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-    const dt = Math.min((now - (this._lastTime || now)) / 1000, 0.05);
+    // `dt` is clamped so a stall can't teleport the simulation. But the perf
+    // tracker must see the REAL delta: clamped at 0.05s, 1/dt could never
+    // report below 20fps, so the on-screen counter sat at exactly "20" no
+    // matter how slow the frame really was — and the adaptive-DPR trigger
+    // could not tell a 20fps frame from a 5fps one.
+    const rawDt = (now - (this._lastTime || now)) / 1000;
+    const dt = Math.min(rawDt, 0.05);
     this._lastTime = now;
-    this._trackPerf(dt);
+    this._trackPerf(rawDt);
     this._checkClock();
 
-    // The flat map has no traffic, crowds, water or weather to simulate —
+    // The flat map has no traffic, crowds, water or weather to simulate -
     // skipping the whole 3D update pass is most of why 2D is cheap.
     const live = this.viewMode !== "2D";
 
@@ -3631,7 +3683,7 @@ export class ThreeCityEngine {
       this._tsT = (this._tsT || 0) + dt;
       for (let i = 0; i < this._tsPanels.length; i++) {
         const pn = this._tsPanels[i];
-        // Ad screens sit at the signage level, not the neon level — driving a
+        // Ad screens sit at the signage level, not the neon level - driving a
         // wall of them at neon brightness is what blew the square out before.
         const base = pn.userData.baseEmissive ?? this.atmo.neonIntensity;
         pn.material.emissiveIntensity =
@@ -3659,7 +3711,7 @@ export class ThreeCityEngine {
     this.railway?.update(dt);
     if (live) this.npcSystem?.update(dt);
 
-    // #1 landmark flourish — counter-rotating halos + a breathing beacon
+    // #1 landmark flourish - counter-rotating halos + a breathing beacon
     const crown = this._crownTower;
     if (crown?.userData.spinners) {
       this._crownT = (this._crownT || 0) + dt;
@@ -3718,7 +3770,7 @@ export class ThreeCityEngine {
   /**
    * "3D" = the isometric city. "2D" = a real street map.
    *
-   * The 2D view is NOT the 3D scene squashed flat — that only ever produced a
+   * The 2D view is NOT the 3D scene squashed flat - that only ever produced a
    * jumble of stretched facades and raking shadows seen from above. It is a
    * purpose-built PLAN LAYER drawn the way a street map is drawn: land wash,
    * water, parks, block fills, cased roads with the arterials picked out in
@@ -3768,7 +3820,7 @@ export class ThreeCityEngine {
 
   /**
    * Build the static half of the map (land, water, parks, roads, blocks and
-   * pre-built footprints). Runs once, lazily, the first time 2D is opened —
+   * pre-built footprints). Runs once, lazily, the first time 2D is opened -
    * so nobody pays for it unless they use it.
    */
   _buildPlanLayer() {
@@ -3805,7 +3857,7 @@ export class ThreeCityEngine {
     // 1. Land wash covering everything the camera can see.
     layer([this._planQuad(0, 0, b.cityW * 6, b.cityD * 4)], P.land, 0, { order: 0 });
 
-    // 2. Water — the eastern ocean and the western river.
+    // 2. Water - the eastern ocean and the western river.
     layer(
       [
         this._planQuad(o.x, (o.z0 + o.z1) / 2, o.w * 2.2, o.depthSpan),
@@ -3828,7 +3880,7 @@ export class ThreeCityEngine {
       { order: 2 }
     );
 
-    // 4. Built-up block fills — the grey "city" tone between the roads.
+    // 4. Built-up block fills - the grey "city" tone between the roads.
     const blocks = [];
     forEachBlock((blk) => blocks.push(this._planQuad(blk.cx, blk.cz, blk.w, blk.d)));
     layer(blocks, P.block, 0.6, { order: 3 });
@@ -3841,7 +3893,7 @@ export class ThreeCityEngine {
       { order: 4 }
     );
 
-    // 6. Roads: casing first, then the fill inside it — the two-tone edge is
+    // 6. Roads: casing first, then the fill inside it - the two-tone edge is
     //    what makes a drawn map read as a road network rather than grey bars.
     const segs = this._roadSegs || roadSegments();
     const CASE = 7; // extra width of the casing on each side
@@ -3887,7 +3939,7 @@ export class ThreeCityEngine {
 
   /**
    * Footprints for the brand-owned towers, tinted by district and carrying the
-   * same userData the 3D towers do — so clicking a building on the map opens
+   * same userData the 3D towers do - so clicking a building on the map opens
    * exactly the popup clicking it in 3D would.
    */
   _syncPlanTowers() {
@@ -3954,7 +4006,7 @@ export class ThreeCityEngine {
   /**
    * Swap the whole world for the flat map, and back.
    *
-   * In 2D the 3D city is not rendered at all — no lights, no shadows, no
+   * In 2D the 3D city is not rendered at all - no lights, no shadows, no
    * post-processing, no NPC or traffic updates. That is the optimisation the
    * old "squash everything" approach could never give.
    */
@@ -3974,7 +4026,7 @@ export class ThreeCityEngine {
 
     // The lights are deliberately left ALONE. Toggling light.visible or
     // shadowMap.enabled changes the renderer's lights hash and forces every
-    // material to recompile on each switch — a visible hitch, in exchange for
+    // material to recompile on each switch - a visible hitch, in exchange for
     // nothing: the map is unlit MeshBasicMaterial and every lit object is
     // already hidden, so the shadow pass renders an empty scene.
     this.renderer.shadowMap.autoUpdate = !flat;
@@ -3989,7 +4041,7 @@ export class ThreeCityEngine {
   /**
    * Paints the city by money: every claimed lot gets a coloured disc scaled to
    * its bid, blended into a single canvas so hot districts glow red and quiet
-   * ones stay blue — the classic value heatmap, laid over the real grid.
+   * ones stay blue - the classic value heatmap, laid over the real grid.
    */
   setHeatmap(on) {
     if (on === this._heatOn) return;
@@ -4086,7 +4138,7 @@ export class ThreeCityEngine {
     this.updateCameraFromSpherical();
   }
 
-  /** Solid footprints (world AABBs) of every standing building — for collision. */
+  /** Solid footprints (world AABBs) of every standing building - for collision. */
   getSolids() {
     if (this._solids) return this._solids;
     const out = [];
@@ -4159,8 +4211,8 @@ export class ThreeCityEngine {
    * Every street-level place a player can be dropped when they enter the city.
    *
    * These used to all sit inside the fountain plaza, so "Enter City" always
-   * put you in the same park. The list now spans the whole map — the square,
-   * the plaza, the waterfront and each named district — and getSpawnPoint()
+   * put you in the same park. The list now spans the whole map - the square,
+   * the plaza, the waterfront and each named district - and getSpawnPoint()
    * picks at random, so consecutive entries land you somewhere new.
    */
   getAllSpawnLocations() {
@@ -4190,7 +4242,7 @@ export class ThreeCityEngine {
     });
 
     return [
-      // ── TIMES SQUARE — the headline arrival, weighted with 8 of the spots
+      // ── TIMES SQUARE - the headline arrival, weighted with 8 of the spots
       // so the crossroads is where you most often wake up.
       { x: ts.cx, y: 0.1, z: ts.cz + tsD * 0.72, yaw: 0, area: "Times Square" },
       { x: ts.cx, y: 0.1, z: ts.cz - tsD * 0.72, yaw: Math.PI, area: "Times Square" },
@@ -4456,7 +4508,7 @@ export function getPlotFixedPriceUSD(districtIdOrArchetype) {
 export const MIN_BRAND_FLOORS = 4;
 // Buying a finished building costs a premium over building one yourself.
 export const PREBUILT_PREMIUM = 1.6;
-// Fixed resale band for ordinary building stock — pocket-change, deliberately.
+// Fixed resale band for ordinary building stock - pocket-change, deliberately.
 // Times Square has no band because its buildings are never for sale; the
 // square's economy is its billboards (see getPrebuiltAt).
 export const SMALL_PRICE_MIN = 2;

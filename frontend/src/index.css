@@ -45,7 +45,7 @@
   --color-card: #1B1815;
   --color-elevated: #24201C;
   /* `cream` is only ever used as a TEXT colour (`dark:text-cream`), so in dark
-     mode it has to stay LIGHT — pointing it at a surface colour painted every
+     mode it has to stay LIGHT - pointing it at a surface colour painted every
      panel/leaderboard label black-on-black. */
   --color-cream: #F7F5F1;
 }
@@ -235,7 +235,7 @@ html, body {
 }
 
 /* Shutter blink used when the map cuts between 3D and 2D.
-   The switch is a hard cut on purpose — cross-fading two completely different
+   The switch is a hard cut on purpose - cross-fading two completely different
    renderings meant running both for the length of the transition. */
 @keyframes view-blink {
   0%   { opacity: 0; }

@@ -15,7 +15,7 @@ import MobileNav from "../components/layout/MobileNav";
 import CommandSearch from "../components/common/CommandSearch";
 import ErrorState from "../components/common/ErrorState";
 
-// The 3D city (three.js + engine + in-city game layer) is a large chunk — load
+// The 3D city (three.js + engine + in-city game layer) is a large chunk - load
 // it after the page shell so the dashboard/nav/panels paint immediately.
 const MapCanvas = lazy(() => import("../components/map/MapCanvas"));
 // MiniMap now renders from cityGrid on a canvas (no maplibre); still lazy so
@@ -102,7 +102,7 @@ export default function Home() {
         gameActive ? "h-screen" : "h-[calc(100vh-56px)] min-h-[560px]"
       }`}
     >
-      {/* ── Map canvas — the dominant surface ───────────────────────── */}
+      {/* ── Map canvas - the dominant surface ───────────────────────── */}
       <Suspense fallback={<MapLoading />}>
         <MapCanvas
           products={allProducts}

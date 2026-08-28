@@ -1,6 +1,6 @@
 /**
  * Money formatting. Amounts are stored server-side in INR (Razorpay), but the
- * UI shows a chosen display currency — USD by default. `CurrencyContext` calls
+ * UI shows a chosen display currency - USD by default. `CurrencyContext` calls
  * `setDisplayCurrency()` so the legacy `formatINR` / `formatCompact` helpers
  * used across the app switch automatically on the next render.
  */

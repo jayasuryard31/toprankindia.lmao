@@ -100,7 +100,7 @@ export class NpcSystem {
       ]);
     }
 
-    // 4. TIMES SQUARE — kept in its own list because the square gets its own
+    // 4. TIMES SQUARE - kept in its own list because the square gets its own
     // (much larger) share of the crowd. The park had a countable handful of
     // walkers; the crossroads is meant to feel shoulder-to-shoulder.
     this.tsRoutes = [];
@@ -160,7 +160,7 @@ export class NpcSystem {
     // visibly the crowded part of town rather than one more quiet block.
     const cityCount = Math.min(150, this.routes.length * 3);
     // The square carries more walkers than the whole rest of the grid. It is
-    // backed by a static instanced crowd too (see timesSquare.js buildCrowd) —
+    // backed by a static instanced crowd too (see timesSquare.js buildCrowd) -
     // these are the ones that move through it.
     const tsCount = 230;
     const count = cityCount + tsCount;
@@ -231,11 +231,17 @@ export class NpcSystem {
       // Distance from camera for LOD optimization
       let distToCam = 0;
       if (camPos) {
-        distToCam = Math.hypot(camPos.x - a.x, camPos.z - a.z);
+        // TRUE 3D distance - the Y term matters. This used to be horizontal
+        // only, so in map view (camera ~2km overhead, but horizontally over
+        // the city centre) every pedestrian downtown counted as "close" and
+        // ~83 of them stayed fully drawn and animated while being a pixel
+        // tall. That was 23ms of a 46ms render. In third person the camera
+        // sits ~3m above the player, so including Y changes nothing there.
+        distToCam = Math.hypot(camPos.x - a.x, camPos.y - a.y, camPos.z - a.z);
       }
 
       // Two-stage LOD. Beyond CULL_DIST a pedestrian is well under a pixel, so
-      // the whole body is hidden — that is what pays for the much larger Times
+      // the whole body is hidden - that is what pays for the much larger Times
       // Square crowd. Between the two thresholds the model still draws but the
       // per-bone walk cycle is skipped.
       const visible = distToCam < NpcSystem.CULL_DIST;

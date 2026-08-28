@@ -1,8 +1,9 @@
+import { useEffect, useState } from "react";
 import GameMinimap from "./GameMinimap";
 import { formatINR } from "../../utils/formatINR";
 
 /**
- * Minimal in-game HUD. Deliberately sparse — it recedes while you just walk
+ * Minimal in-game HUD. Deliberately sparse - it recedes while you just walk
  * around and only speaks up for an interaction prompt.
  */
 export default function GameHUD({
@@ -16,25 +17,48 @@ export default function GameHUD({
   online = 1,
   isTouch = false,
 }) {
+  const [fps, setFps] = useState(() => Math.round(engine?._fps || 60));
+
+  useEffect(() => {
+    if (!engine) return undefined;
+    const poll = () => {
+      const s = engine.getRenderStats?.();
+      if (s && typeof s.fps === "number") setFps(s.fps);
+    };
+    const id = setInterval(poll, 250);
+    poll();
+    return () => clearInterval(id);
+  }, [engine]);
+
   return (
     <>
-      {/* TOP-LEFT — where am I */}
+      {/* TOP-LEFT - where am I */}
       <div className="absolute top-3 left-3 sm:top-5 sm:left-5 pointer-events-none select-none">
         <div className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-black/35 backdrop-blur-md border border-white/10 text-white">
           <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.22em] text-white/55">District</div>
-          <div className="text-xs sm:text-sm font-bold tracking-wide">{locate.district || "—"}</div>
+          <div className="text-xs sm:text-sm font-bold tracking-wide">{locate.district || "-"}</div>
           <div className="text-[10px] sm:text-[11px] text-white/60 font-mono">{locate.area || ""}</div>
         </div>
       </div>
 
-      {/* TOP-RIGHT — online presence */}
+      {/* TOP-RIGHT - FPS & online presence */}
       <div className="absolute top-3 right-3 sm:top-5 sm:right-5 pointer-events-auto select-none flex flex-col items-end gap-1.5 sm:gap-2">
-        <div className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-black/35 backdrop-blur-md border border-white/10 flex items-center gap-1.5 sm:gap-2">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
-          </span>
-          <span className="text-[11px] sm:text-xs font-bold text-white font-mono">{online} Online</span>
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-black/35 backdrop-blur-md border border-white/10 flex items-center gap-1.5 font-mono text-[11px] sm:text-xs">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                fps >= 50 ? "bg-emerald-400" : fps >= 30 ? "bg-amber-400" : "bg-rose-400"
+              }`}
+            />
+            <span className="font-bold text-white tabular-nums">{fps} FPS</span>
+          </div>
+          <div className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-black/35 backdrop-blur-md border border-white/10 flex items-center gap-1.5 sm:gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+            </span>
+            <span className="text-[11px] sm:text-xs font-bold text-white font-mono">{online} Online</span>
+          </div>
         </div>
         <button
           onClick={onExit}
@@ -44,7 +68,7 @@ export default function GameHUD({
         </button>
       </div>
 
-      {/* BOTTOM-LEFT — keyboard hints (desktop only; touch has its own stick) */}
+      {/* BOTTOM-LEFT - keyboard hints (desktop only; touch has its own stick) */}
       {!isTouch && (
         <div className="absolute bottom-5 left-5 pointer-events-none select-none">
           <div className="px-3 py-2 rounded-xl bg-black/25 backdrop-blur-md border border-white/10 text-[11px] text-white/70 font-mono leading-relaxed">
@@ -56,7 +80,7 @@ export default function GameHUD({
         </div>
       )}
 
-      {/* minimap — bottom-right on desktop, tucked under the top bar on touch
+      {/* minimap - bottom-right on desktop, tucked under the top bar on touch
           so it never collides with the action buttons */}
       <div
         className={`absolute pointer-events-none select-none ${

@@ -17,7 +17,7 @@ import {
 
 /**
  * Canvas minimap rendered straight from the SAME cityGrid the 3D world is
- * built from, plus live engine state. It is not a separate map — every road,
+ * built from, plus live engine state. It is not a separate map - every road,
  * block, park, plot and tower you see here exists at those exact coordinates
  * in the city, so the overview and the world can never drift apart.
  *
@@ -117,7 +117,7 @@ export default function CityMiniMap({
         }
       }
 
-      // individual plots — the battleground-style parcel grid
+      // individual plots - the battleground-style parcel grid
       if (showPlots && engine?.fillerSlots) {
         engine.fillerSlots.forEach((sl) => {
           if (!sl) return;
@@ -176,7 +176,7 @@ export default function CityMiniMap({
         ctx.fillRect(toX(bb.position.x) - 1.5, toY(bb.position.z) - 1.5, 3, 3);
       });
 
-      // traffic — makes the overview feel alive
+      // traffic - makes the overview feel alive
       if (engine?.trafficCars) {
         ctx.fillStyle = "rgba(255,255,255,0.75)";
         engine.trafficCars.forEach((c) => ctx.fillRect(toX(c.x) - 0.8, toY(c.z) - 0.8, 1.6, 1.6));

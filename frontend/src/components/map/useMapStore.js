@@ -27,7 +27,7 @@ export const useMapStore = create((set) => ({
   selectedDistrict: null,
   selectedBuilding: null,
   hoveredDistrict: null,
-  viewMode: "3D", // "2D" | "3D" — the city is 3D by default
+  viewMode: "3D", // "2D" | "3D" - the city is 3D by default
   showHeatmap: false,
   selectedCategory: null,
   camera: { center: [72.905, 19.09], zoom: 11.85, pitch: 0, bearing: 0 },

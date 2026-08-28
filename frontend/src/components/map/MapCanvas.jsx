@@ -170,7 +170,7 @@ export default function MapCanvas({
   }, [theme]);
 
   // 2b. Sync 2D/3D view mode + heatmap overlay.
-  // The engine cuts between the two views instantly (no camera tween — see
+  // The engine cuts between the two views instantly (no camera tween - see
   // setViewMode). The cut is hidden behind a shutter blink, and fired at the
   // blink's peak so the swap is never visible.
   useEffect(() => {
@@ -200,7 +200,7 @@ export default function MapCanvas({
       engineRef.current.refreshHeatmap?.();
       updateProjectedOverlays();
 
-      // Opening shot — glide in on the #1 landmark the first time this engine
+      // Opening shot - glide in on the #1 landmark the first time this engine
       // has real data. Flag lives on the engine so a StrictMode remount (which
       // builds a fresh engine) still gets its intro. Any interaction cancels it.
       const engine = engineRef.current;
@@ -244,7 +244,7 @@ export default function MapCanvas({
         />
       )}
 
-      {/* Opening shot — subtle lower-third caption, never blocks the city */}
+      {/* Opening shot - subtle lower-third caption, never blocks the city */}
       {introPlaying && !gameActive && (
         <div
           className="absolute left-1/2 -translate-x-1/2 z-30 bottom-[11.75rem] md:bottom-32
@@ -267,7 +267,7 @@ export default function MapCanvas({
         </div>
       )}
 
-      {/* Enter City CTA — on mobile: on top below navigation bar; on desktop: bottom-center */}
+      {/* Enter City CTA - on mobile: on top below navigation bar; on desktop: bottom-center */}
       {!gameActive && (
         <div
           className="absolute left-1/2 -translate-x-1/2 z-40 pointer-events-auto
@@ -286,7 +286,7 @@ export default function MapCanvas({
         />
       )}
 
-      {/* Map overlays — hidden while playing */}
+      {/* Map overlays - hidden while playing */}
       {!gameActive && (
         <>
       <DistrictOverlayCards

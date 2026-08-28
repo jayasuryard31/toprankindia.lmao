@@ -1,5 +1,5 @@
 /**
- * MultiplayerClient — Real-time WebSocket client for in-city player presence,
+ * MultiplayerClient - Real-time WebSocket client for in-city player presence,
  * movement sync, and live online count.
  */
 

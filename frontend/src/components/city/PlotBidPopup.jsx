@@ -71,7 +71,7 @@ export default function PlotBidPopup({ plot, screenPos, onClose, onAcquire }) {
         amount: order.amount * 100,
         currency: order.currency || "INR",
         name: "TopRankPlots Metropolis",
-        description: `Acquire ${plot.plotNumber} — ${format(order.amount)}`,
+        description: `Acquire ${plot.plotNumber} - ${format(order.amount)}`,
         prefill: {
           name: "TopRankPlots Trader",
           email: "trader@toprankworld.lol",
@@ -124,7 +124,7 @@ export default function PlotBidPopup({ plot, screenPos, onClose, onAcquire }) {
               plotLng: plot.worldX,
               plotLat: plot.worldZ,
             };
-            toast.success(`${plot.plotNumber} acquired — your building is rising!`);
+            toast.success(`${plot.plotNumber} acquired - your building is rising!`);
             onAcquire?.(acquiredProduct, plot.worldX, plot.worldZ);
             onClose?.();
           } catch {
@@ -211,7 +211,7 @@ export default function PlotBidPopup({ plot, screenPos, onClose, onAcquire }) {
 
       <p className="text-[11px] text-muted mb-3">
         {plot.taken
-          ? "This plot is occupied — outbid its owner from their building to take it over."
+          ? "This plot is occupied - outbid its owner from their building to take it over."
           : `Acquire ${plot.plotNumber || "this plot"} with a fixed base rate of $${fixedRateUSD}. Your investment raises your brand's permanent skyscraper!`}
       </p>
 

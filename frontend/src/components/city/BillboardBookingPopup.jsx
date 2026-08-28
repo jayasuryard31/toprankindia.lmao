@@ -91,7 +91,7 @@ export default function BillboardBookingPopup({ billboard, screenPos, onClose, o
         amount: order.amount * 100,
         currency: order.currency || "INR",
         name: "TopRankPlots Billboard Advertising",
-        description: `Book Billboard #${bbNumber} (${months} mo) — $${totalRateUSD}`,
+        description: `Book Billboard #${bbNumber} (${months} mo) - $${totalRateUSD}`,
         order_id: order.orderId,
         prefill: {
           name: "TopRankPlots Advertiser",

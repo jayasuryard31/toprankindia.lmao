@@ -20,7 +20,7 @@ Set in `frontend/.env`:
 VITE_API_BASE_URL=http://localhost:5000/api
 ```
 
-Never hardcode the URL in components — read it from `import.meta.env.VITE_API_BASE_URL` (already done in [`api.js`](./api.js)).
+Never hardcode the URL in components - read it from `import.meta.env.VITE_API_BASE_URL` (already done in [`api.js`](./api.js)).
 
 ## Response envelope
 
@@ -34,15 +34,15 @@ Every backend endpoint returns the same shape, always with HTTP 200:
 }
 ```
 
-- `responseCode` — an app-level code (not an HTTP status). `1000`/`1001` mean success; anything else is an error. See the table below.
-- `responseMessage` — human-readable message, safe to show in a toast/alert.
-- `responseData` — the actual payload. Its shape depends on the endpoint; on error it's usually a string.
+- `responseCode` - an app-level code (not an HTTP status). `1000`/`1001` mean success; anything else is an error. See the table below.
+- `responseMessage` - human-readable message, safe to show in a toast/alert.
+- `responseData` - the actual payload. Its shape depends on the endpoint; on error it's usually a string.
 
 Because HTTP status is always 200, **check `responseCode`, not `res.status`**, to know if a call succeeded.
 
 ### Response codes
 
-Defined in `backend/Globals/Response.js`. New codes get added there as the backend grows — treat this table as a snapshot, not a guarantee.
+Defined in `backend/Globals/Response.js`. New codes get added there as the backend grows - treat this table as a snapshot, not a guarantee.
 
 | Code | Meaning           |
 |------|-------------------|
@@ -77,7 +77,7 @@ export const myNewCall = (payload) =>
   request('/my-endpoint', { method: 'POST', body: JSON.stringify(payload) })
 ```
 
-Don't call `fetch` directly from components — always go through `api.js` so the envelope-unwrapping and error handling stay in one place.
+Don't call `fetch` directly from components - always go through `api.js` so the envelope-unwrapping and error handling stay in one place.
 
 ## Current endpoints
 

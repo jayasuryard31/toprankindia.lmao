@@ -1,5 +1,5 @@
 /**
- * Canonical constant billboard catalog — the single source of truth for what
+ * Canonical constant billboard catalog - the single source of truth for what
  * the city has for sale.
  *
  *   #1 – #10   the original city-wide slots ($5 – $30 / month)
@@ -11,7 +11,7 @@
  *
  * `mount` decides how a slot is physically carried, and must stay in step with
  * CITY_BILLBOARD_LOCATIONS in the frontend (brandShowcase.js):
- *   "facade"  bolted flat to a building wall — no pylons
+ *   "facade"  bolted flat to a building wall - no pylons
  *   "folded"  two half panels wrapping a building corner in a shallow V
  *   "gantry"  straddling legs over a roadway
  *   "pole"    a free-standing pylon or plaza totem
@@ -209,7 +209,7 @@ const BILLBOARD_CATALOG = [
     offsetZ: 110,
     yaw: -Math.PI / 2,
   },
-  // ── TIMES SQUARE (#11 – #24) — the premium wall ─────────────────────
+  // ── TIMES SQUARE (#11 – #24) - the premium wall ─────────────────────
   {
     billboardNumber: 11,
     code: "bb_ts_north_marquee",

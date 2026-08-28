@@ -17,7 +17,7 @@ const BOUNDS = {
   maxLat: CROWN[1] + GRID_REACH,
 };
 
-/** Default camera — frames the whole 9-district belt with terrain W and harbour E in view. */
+/** Default camera - frames the whole 9-district belt with terrain W and harbour E in view. */
 export const CITY_CENTER = [72.905, 19.09];
 export const CITY_ZOOM = 11.85;
 

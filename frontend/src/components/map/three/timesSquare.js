@@ -5,14 +5,14 @@ import { makeStreetlight, makePeople, finishTex, mulberry } from "./cityProps.js
 import { SIGN_LIGHT, CITY_BILLBOARD_LOCATIONS } from "./brandShowcase.js";
 
 /**
- * timesSquare.js — the crossroads, built to match the real place.
+ * timesSquare.js - the crossroads, built to match the real place.
  *
  * The square is the one part of Velora Harbor that is meant to overwhelm you,
  * and that comes down to four things the rest of the city does not do:
  *
  *   1. SIGNAGE DENSITY. Real Times Square has no bare wall. Every frontage is
- *      papered floor-to-roof with screens — wide marquees, tall vertical
- *      banners, thin ribbon boards, corner wraps — stacked and butted together
+ *      papered floor-to-roof with screens - wide marquees, tall vertical
+ *      banners, thin ribbon boards, corner wraps - stacked and butted together
  *      with almost no gaps. A dozen tidy billboards on poles reads as a
  *      shopping centre car park, not Broadway.
  *   2. STREET-LEVEL RETAIL. Under the signs is a continuous lit shopfront band:
@@ -21,7 +21,7 @@ import { SIGN_LIGHT, CITY_BILLBOARD_LOCATIONS } from "./brandShowcase.js";
  *      the red steps and at the red café tables.
  *   4. TRAFFIC. Yellow cabs, nose to tail.
  *
- * PERFORMANCE NOTE — how ~150 signs cost ~15 draw calls:
+ * PERFORMANCE NOTE - how ~150 signs cost ~15 draw calls:
  * every ambient sign samples one of a small bank of shared, procedurally
  * generated ad textures. Panels are grouped BY TEXTURE and their geometry is
  * baked into a single merged mesh per texture, so the whole sign wall is a
@@ -130,7 +130,7 @@ function makeAdTexture(shape, seed) {
     }
   }
 
-  // faint LED pixel grid over everything — these are screens, not posters
+  // faint LED pixel grid over everything - these are screens, not posters
   ctx.strokeStyle = "rgba(0,0,0,0.10)";
   ctx.lineWidth = 1;
   for (let x = 0; x < W; x += 8) {
@@ -225,7 +225,7 @@ function makeAdBank() {
  * the small outward offset that keeps a panel proud of the brickwork.
  *
  * Offsets come from the grid: the square's rect edges are the CENTRES of the
- * roads that box it, so the wall is half a road plus the lot setback away —
+ * roads that box it, so the wall is half a road plus the lot setback away -
  * 16 on the narrow streets (north/south), 20 on the wide avenues (east/west).
  */
 function frontages(rect) {
@@ -370,7 +370,7 @@ function buildSignWall(engine, group, rect, bank) {
       const bayW = f.len * (t1 - t0);
       const mid = f.at((t0 + t1) / 2);
 
-      // A tall vertical banner claims the whole bay now and then — these are
+      // A tall vertical banner claims the whole bay now and then - these are
       // the building-height posters that give the square its scale.
       const alongOf = (pt) => (f.out.z ? pt.x : pt.z);
 
@@ -533,7 +533,7 @@ function buildShopFronts(engine, group, rect, bank) {
     }
   });
 
-  // Warm interior glow spilling onto the pavement — the single biggest cue
+  // Warm interior glow spilling onto the pavement - the single biggest cue
   // that the ground floor is occupied.
   const glass = new THREE.Mesh(
     merge(glassGeos),
@@ -577,7 +577,7 @@ function buildShopFronts(engine, group, rect, bank) {
 // ── The landmark stack ────────────────────────────────────────────────
 
 /**
- * The slender tower of stacked screens that closes the view down the avenue —
+ * The slender tower of stacked screens that closes the view down the avenue -
  * our answer to the wedge tower at the south tip of the real square, ball and
  * all. It is mounted on the face of the building that already stands there,
  * so it needs no lot of its own.
@@ -756,7 +756,7 @@ function buildPlazaFurniture(engine, group, pads) {
 }
 
 /**
- * Food carts, newsstands and flag poles — the small clutter that stops the
+ * Food carts, newsstands and flag poles - the small clutter that stops the
  * pavement reading as an empty parade ground.
  */
 function buildStreetClutter(engine, group, rect, pads) {
@@ -875,7 +875,7 @@ function stallSignTexture(label, canopyHex, seed) {
 /**
  * The street market that fills the pedestrian pads.
  *
- * Real Times Square pavement is lined with vendors — carts, folding tables
+ * Real Times Square pavement is lined with vendors - carts, folding tables
  * under striped canopies, racks of shirts and caps. Each stall here is a
  * counter, a striped canopy with a painted valance, a crate of goods, a
  * price board and a vendor standing behind it, so the plaza reads as somewhere
@@ -988,7 +988,7 @@ function buildMarketStalls(engine, group, pads) {
 // ── Crowd ─────────────────────────────────────────────────────────────
 
 /**
- * The standing crowd — arranged, not scattered.
+ * The standing crowd - arranged, not scattered.
  *
  * The animated NpcSystem supplies motion; these are the static instanced
  * figures that make the plaza genuinely full (six draw calls for the lot).
@@ -1008,7 +1008,7 @@ function buildCrowd(engine, group, pads, rect, stallPeople = []) {
   const positions = [];
   const jitter = (k) => (r() - 0.5) * k;
 
-  // 1. Market vendors and their queues — already positioned, just adopt them.
+  // 1. Market vendors and their queues - already positioned, just adopt them.
   stallPeople.forEach((p) => positions.push([p.x, p.z, p.yaw]));
 
   pads.forEach((pad) => {
@@ -1066,7 +1066,7 @@ function buildCrowd(engine, group, pads, rect, stallPeople = []) {
   }
 
   // 5. Platoons waiting to cross, banked up at each crosswalk head and all
-  //    pointing the same way — the tell-tale shape of a real junction.
+  //    pointing the same way - the tell-tale shape of a real junction.
   const AV = GRID.ROAD_W_AVENUE / 2;
   const ST = GRID.ROAD_W_STREET / 2;
   [

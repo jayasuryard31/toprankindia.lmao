@@ -2,7 +2,7 @@ import { createPlayerModel } from "./player/PlayerModel";
 import { PlayerAnimator } from "./player/PlayerAnimator";
 
 /**
- * Character adapter contract — the ONLY thing gameplay code touches:
+ * Character adapter contract - the ONLY thing gameplay code touches:
  *
  *   const char = await loadCharacter(urlOrNull, opts);
  *   char.group                       // THREE.Object3D, feet at origin
@@ -13,7 +13,7 @@ import { PlayerAnimator } from "./player/PlayerAnimator";
  * `url` null / undefined  -> procedural humanoid (works today, no assets).
  * `url` "*.glb" / "*.gltf" -> loaded with GLTFLoader + AnimationMixer, mapping
  *   clip names to the same { idle, walk, run, jump, crouch } states. Drop real
- *   models into src/game/characters/models/ and pass their path — no other
+ *   models into src/game/characters/models/ and pass their path - no other
  *   code changes.
  */
 export async function loadCharacter(url, opts = {}) {

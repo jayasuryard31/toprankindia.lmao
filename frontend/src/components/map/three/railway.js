@@ -6,7 +6,7 @@ import { createNpcModel } from "../../../game/characters/npc/NpcModel.js";
 import { PlayerAnimator } from "../../../game/characters/player/PlayerAnimator.js";
 
 /**
- * railway.js — the Velora Harbor loop line.
+ * railway.js - the Velora Harbor loop line.
  *
  * A single street-running light-rail loop that circles the whole city and cuts
  * straight through Times Square, with one train shuttling between three
@@ -14,14 +14,14 @@ import { PlayerAnimator } from "../../../game/characters/player/PlayerAnimator.j
  *
  * ── Why it never collides with the roads ────────────────────────────────
  * The track is laid on ROAD CENTRELINES, and the traffic system parks every
- * vehicle in an offset lane — ±ROAD_W_AVENUE/4 on avenues, ±ROAD_W_STREET/4 on
- * streets — so the centre strip of each carriageway is permanently empty. That
+ * vehicle in an offset lane - ±ROAD_W_AVENUE/4 on avenues, ±ROAD_W_STREET/4 on
+ * streets - so the centre strip of each carriageway is permanently empty. That
  * is the corridor the rails occupy, which is also exactly how a real
  * street-running tram shares a road. The four corner curves use a 9m radius,
  * chosen so each arc's bounding box stays inside the road intersection and
  * never reaches the building blocks (they begin 11m from the centreline).
  *
- * Because the line is flush street track there is no ballast or sleepers —
+ * Because the line is flush street track there is no ballast or sleepers -
  * just grooved rails and a slightly darker track bed, the way tram track is
  * actually laid into tarmac.
  *
@@ -176,7 +176,7 @@ function nearestS(path, x, z) {
 }
 
 /**
- * A flat ribbon following the polyline — used for the rails and the track bed.
+ * A flat ribbon following the polyline - used for the rails and the track bed.
  * Cheap: two vertices per sample, one draw call for the whole loop.
  */
 function ribbon(pts, halfWidth, y, lateral = 0) {
@@ -360,7 +360,7 @@ export class RailwaySystem {
     this.group.add(mesh);
   }
 
-  /** Overhead line and its masts — the giveaway that this is electrified rail. */
+  /** Overhead line and its masts - the giveaway that this is electrified rail. */
   _buildCatenary() {
     const pts = this.path.pts;
     const wire = new THREE.BufferGeometry().setFromPoints(
@@ -508,7 +508,7 @@ export class RailwaySystem {
 
     this.group.add(g);
 
-    // The platform is solid — you walk along it, not through it.
+    // The platform is solid - you walk along it, not through it.
     this.engine.propColliders.push({
       cx: sample.x,
       cz: sample.z,
@@ -561,7 +561,7 @@ export class RailwaySystem {
     roof.position.y = H + 0.8;
     g.add(roof);
 
-    // Arched glazing across the front — lit from inside after dark.
+    // Arched glazing across the front - lit from inside after dark.
     const glassMat = new THREE.MeshStandardMaterial({
       color: 0xffe9c4,
       emissive: new THREE.Color(0xffd79a),
@@ -756,7 +756,7 @@ export class RailwaySystem {
       return { x: x + alongX * off - nx * 0.9, z: z + alongZ * off - nz * 0.9 };
     };
 
-    // Alighting first — real platforms clear before they fill.
+    // Alighting first - real platforms clear before they fill.
     for (let k = 0; k < 4 && i < this.passengers.length; k++, i++) {
       const p = this.passengers[i];
       p.active = true;
@@ -881,8 +881,8 @@ export class RailwaySystem {
   }
 
   /**
-   * Car bodies as dynamic solids. The train is scenery — there is no board
-   * prompt anywhere — and this is what physically stops the player from
+   * Car bodies as dynamic solids. The train is scenery - there is no board
+   * prompt anywhere - and this is what physically stops the player from
    * walking into (or through) it.
    */
   getSolids() {

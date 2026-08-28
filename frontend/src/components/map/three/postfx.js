@@ -1,5 +1,5 @@
 /**
- * postfx.js — optional EffectComposer pipeline with a hard fallback to the
+ * postfx.js - optional EffectComposer pipeline with a hard fallback to the
  * plain renderer. Selective bloom: only meshes tagged userData.bloom (lit
  * windows, beacons, the #1 crown ring) glow.
  */
@@ -11,8 +11,13 @@ import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
 import { GammaCorrectionShader } from "three/addons/shaders/GammaCorrectionShader.js";
 
-const BLOOM_LAYER = 1;
 const dark = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+// The bloom chain's whole output is a blur, so feeding it a half-resolution
+// render is visually indistinguishable from full res while costing a quarter
+// of the fill - and the bloom pass re-renders the entire scene, so this is the
+// single cheapest way to claw that back. The final image stays full res.
+const BLOOM_SCALE = 0.5;
 
 export function shouldEnablePostFX() {
   if (typeof window === "undefined") return false;
@@ -28,6 +33,8 @@ export function createPostFX(renderer, scene, camera) {
 
   const bloomComposer = new EffectComposer(renderer);
   bloomComposer.renderToScreen = false;
+  bloomComposer.setSize(Math.max(1, Math.round(size.x * BLOOM_SCALE)),
+                        Math.max(1, Math.round(size.y * BLOOM_SCALE)));
   bloomComposer.addPass(new RenderPass(scene, camera));
   // strength / radius / threshold.
   // Tuned DOWN hard: at 0.55/0.6 the Times Square sign wall blew into a single
@@ -58,35 +65,59 @@ export function createPostFX(renderer, scene, camera) {
   finalComposer.addPass(new ShaderPass(GammaCorrectionShader));
   finalComposer.addPass(new SMAAPass(size.x, size.y));
 
-  const bloomLayer = new THREE.Layers();
-  bloomLayer.set(BLOOM_LAYER);
-  const stash = {};
+  // ── Cached darken list ──────────────────────────────────────────────
+  // The naive version ran scene.traverse() TWICE every frame to find which
+  // meshes to black out. This scene is ~23k meshes inside ~39k Object3Ds, so
+  // that was ~80k node visits plus ~46k material writes per frame, purely to
+  // rediscover a set that only changes when the world is rebuilt.
+  //
+  // Instead: walk once, keep the non-bloom meshes in a flat array, and reuse
+  // it until something invalidates it. Identical output, no per-frame walk.
+  let occluders = [];   // meshes that must render black in the bloom pass
+  let saved = [];       // their real materials, parallel to `occluders`
+  let dirty = true;
+  let lastBuild = 0;
 
-  function darken(obj) {
-    if (obj.isMesh) {
-      const glows = obj.userData && obj.userData.bloom;
-      if (!glows) {
-        stash[obj.uuid] = obj.material;
-        obj.material = dark;
-      }
-    }
-  }
-  function restore(obj) {
-    if (stash[obj.uuid]) {
-      obj.material = stash[obj.uuid];
-      delete stash[obj.uuid];
-    }
+  function rebuild() {
+    occluders.length = 0;
+    scene.traverse((o) => {
+      if (o.isMesh && !(o.userData && o.userData.bloom)) occluders.push(o);
+    });
+    saved = new Array(occluders.length);
+    dirty = false;
+    lastBuild = performance.now();
   }
 
   return {
+    /** Call when meshes are added/removed outside the tracked rebuild hooks. */
+    invalidate() {
+      dirty = true;
+    },
     render() {
-      scene.traverse(darken);
+      // Safety net: anything that adds meshes without calling invalidate()
+      // (a multiplayer peer joining, say) is picked up within a second.
+      if (dirty || performance.now() - lastBuild > 1000) rebuild();
+
+      for (let i = 0; i < occluders.length; i++) {
+        saved[i] = occluders[i].material;
+        occluders[i].material = dark;
+      }
+      // Flag the bloom pass so anything with an expensive onBeforeRender can
+      // opt out of it. Water surfaces in particular re-render the whole scene
+      // into a reflection target, and in this pass they are painted flat black
+      // - the reflection would be computed and immediately discarded.
+      scene.userData.bloomPass = true;
       bloomComposer.render();
-      scene.traverse(restore);
+      scene.userData.bloomPass = false;
+      for (let i = 0; i < occluders.length; i++) {
+        occluders[i].material = saved[i];
+        saved[i] = null;
+      }
       finalComposer.render();
     },
     setSize(w, h) {
-      bloomComposer.setSize(w, h);
+      bloomComposer.setSize(Math.max(1, Math.round(w * BLOOM_SCALE)),
+                            Math.max(1, Math.round(h * BLOOM_SCALE)));
       finalComposer.setSize(w, h);
     },
     dispose() {

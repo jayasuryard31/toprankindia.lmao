@@ -2,8 +2,8 @@ import * as THREE from "three";
 import { forEachLot, districtForBlock } from "../../components/map/three/cityGrid";
 
 /**
- * "Available land" dressing for undeveloped lots — chain-link posts + a
- * hoarding sign — so the TopRankIndia marketplace is visible in-world.
+ * "Available land" dressing for undeveloped lots - chain-link posts + a
+ * hoarding sign - so the TopRankIndia marketplace is visible in-world.
  * Everything merges into a handful of meshes; capped for performance.
  */
 export function buildVacantPlots(engine, { max = 90 } = {}) {
@@ -54,7 +54,7 @@ export function buildVacantPlots(engine, { max = 90 } = {}) {
         railGeos.push(g);
       });
       // One solid collider per fence run. Height matches the TOP RAIL (1.35),
-      // not the posts — so a well-timed jump (apex ≈ 1.56m) clears it.
+      // not the posts - so a well-timed jump (apex ≈ 1.56m) clears it.
       colliders.push({
         cx: lot.cx + ox,
         cz: lot.cz + oz,

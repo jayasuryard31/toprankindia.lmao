@@ -267,7 +267,7 @@ export class GameController {
     if (this.phase === "leaving" || this.phase === "idle") return;
     this.phase = "leaving";
     this._emit();
-    // quick lift back to the saved aerial framing — time-boxed so a throttled
+    // quick lift back to the saved aerial framing - time-boxed so a throttled
     // rAF (e.g. a hidden tab) can never make the exit hang.
     const engine = this.engine;
     const from = engine.camera.position.clone();

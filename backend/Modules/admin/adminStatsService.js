@@ -147,7 +147,7 @@ async function getAdminStats() {
         ...recentProductPayments.map((p) => ({
           kind: "PLOT",
           id: p.id,
-          brand: p.product?.websiteName || p.product?.websiteUrl || "—",
+          brand: p.product?.websiteName || p.product?.websiteUrl || "-",
           amount: p.amount,
           currency: p.currency,
           status: p.status,
@@ -156,7 +156,7 @@ async function getAdminStats() {
         ...recentBillboardPayments.map((p) => ({
           kind: "BILLBOARD",
           id: p.id,
-          brand: p.brandName || p.websiteUrl || "—",
+          brand: p.brandName || p.websiteUrl || "-",
           amount: p.amountUSD,
           currency: "USD",
           status: p.status,

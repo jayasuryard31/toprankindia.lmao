@@ -1,26 +1,26 @@
 /**
- * VELORA HARBOR — Fictional City Layout (single source of truth)
+ * VELORA HARBOR - Fictional City Layout (single source of truth)
  *
  * A large coastal grid city expressed as GeoJSON in a fake lng/lat window.
  * The land grid is effectively endless to the north / south / west; the ocean
  * sits to the east. Ranked buildings are placed on an outward spiral of block
  * plots (`assignPlotForRank`) so there is always a fresh plot for the next
- * site — plot 1 is the central "crown", plots radiate outward by rank.
+ * site - plot 1 is the central "crown", plots radiate outward by rank.
  */
 
 const ORIGIN = [72.9, 19.09];
-const CROWN = [72.9, 19.09]; // heart of Central District — spiral origin
+const CROWN = [72.9, 19.09]; // heart of Central District - spiral origin
 
 // One city block.
 const BLOCK = 0.0055;
-// Phyllotaxis radius coefficient — plot `n` sits at radius PLOT_SPREAD*sqrt(n)
+// Phyllotaxis radius coefficient - plot `n` sits at radius PLOT_SPREAD*sqrt(n)
 // on a golden-angle spiral, so plots fan out evenly and endlessly from the
 // crown with roughly-even spacing (no clumps, no gaps).
 const PLOT_SPREAD = 0.0095;
 
 // How far the drawn grid / water / terrain extend from the crown (degrees).
 const GRID_REACH = 0.34; // ~62 roads each axis over the drawn area
-const WORLD_REACH = 3.0; // water & terrain fills stretch this far — "never ending"
+const WORLD_REACH = 3.0; // water & terrain fills stretch this far - "never ending"
 
 // Everything east of this longitude is open ocean.
 const COAST_LNG = CROWN[0] + 0.135;
@@ -84,7 +84,7 @@ const WATER = fc([
 ]);
 
 const TERRAIN = fc([
-  // Greenridge Hills — the endless soft-green frontier west of the grid.
+  // Greenridge Hills - the endless soft-green frontier west of the grid.
   polygon(rect(CROWN[0] - WORLD_REACH, CROWN[1] - WORLD_REACH, BOUNDS.minLng + 0.06, CROWN[1] + WORLD_REACH), {
     name: "Greenridge Hills",
   }),
@@ -129,7 +129,7 @@ function buildRoads() {
 
 const ROADS = buildRoads();
 
-// ── Plots — an endless golden-angle (sunflower) spiral from the crown ──
+// ── Plots - an endless golden-angle (sunflower) spiral from the crown ──
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5)); // ~137.5°
 const MAX_LAND_LNG = COAST_LNG - PLOT_SPREAD * 0.4;
@@ -169,7 +169,7 @@ const plotAt = (rank, lng, lat) => ({
 });
 
 /**
- * Deterministic plot for a 1-based all-time rank. Always resolves — the spiral
+ * Deterministic plot for a 1-based all-time rank. Always resolves - the spiral
  * is endless, so every new site gets a fresh plot. O(1).
  */
 function assignPlotForRank(rank) {

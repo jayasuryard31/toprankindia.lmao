@@ -248,7 +248,7 @@ export class PlayerAnimator {
     if (J.state === "launch" && (J.t >= LAUNCH_T || !grounded)) J.state = "air";
     if (!grounded && J.state !== "air") J.state = "air";
     if (grounded && this._wasGrounded === false) {
-      // touchdown — absorb proportional to how hard we hit
+      // touchdown - absorb proportional to how hard we hit
       this.landImpact = THREE.MathUtils.clamp(Math.abs(vy) / 9, 0.25, 1);
       J.state = "land";
       J.t = 0;

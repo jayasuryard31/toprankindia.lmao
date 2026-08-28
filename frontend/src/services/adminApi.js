@@ -3,7 +3,7 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 /**
  * Deliberately separate from services/api.js: the admin secret must be sent
  * as a header on every request and a wrong/missing one needs to surface as a
- * distinguishable 401, not just "request failed" — worth its own tiny client
+ * distinguishable 401, not just "request failed" - worth its own tiny client
  * rather than bending the shared one.
  */
 export async function getAdminStats(code) {

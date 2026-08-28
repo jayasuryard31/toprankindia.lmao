@@ -3,11 +3,11 @@ const prisma = require("../Config/DBConnect");
 
 /**
  * Resolve a request's client IP to a country/city using an OFFLINE MaxMind-lite
- * database (geoip-lite). No IP or location data is ever sent to a third party —
+ * database (geoip-lite). No IP or location data is ever sent to a third party -
  * the lookup is a local table read.
  *
  * `req.ip` already reflects X-Forwarded-For correctly because the app trusts
- * the reverse proxy (see server bootstrap — `app.set("trust proxy", ...)`).
+ * the reverse proxy (see server bootstrap - `app.set("trust proxy", ...)`).
  */
 function resolveGeo(req) {
   const ip = (req.ip || "").replace(/^::ffff:/, "");
@@ -20,7 +20,7 @@ function resolveGeo(req) {
 
 /**
  * Fire-and-forget visit logger for the admin traffic dashboard. Never throws
- * into the caller — analytics must not be able to break a real request.
+ * into the caller - analytics must not be able to break a real request.
  */
 async function logVisit({ req, path, productId = null }) {
   try {
