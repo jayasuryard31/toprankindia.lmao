@@ -72,6 +72,7 @@ export default function PlotBidPopup({ plot, screenPos, onClose, onAcquire }) {
         currency: order.currency || "INR",
         name: "TopRankPlots Metropolis",
         description: `Acquire ${plot.plotNumber} - ${format(order.amount)}`,
+        order_id: order.orderId,
         prefill: {
           name: "TopRankPlots Trader",
           email: "trader@toprankworld.lol",
