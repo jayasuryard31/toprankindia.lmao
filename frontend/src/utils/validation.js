@@ -20,7 +20,9 @@ export function extractHostname(string) {
 
 export function getFaviconUrl(string) {
   const host = extractHostname(string);
-  if (!host || !host.includes(".")) return "";
+  if (!host || !host.includes(".") || host.endsWith(".")) return "";
+  const parts = host.split(".");
+  if (parts.some((part) => part.length === 0)) return "";
   return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`;
 }
 

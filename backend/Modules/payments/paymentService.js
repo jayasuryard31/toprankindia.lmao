@@ -112,7 +112,12 @@ async function createOrder(websiteUrl, categoryId, amount) {
     status: "CREATED",
   });
 
-  return { orderId: order.id, amount, currency: CURRENCY };
+  return {
+    orderId: order.id,
+    amount,
+    currency: CURRENCY,
+    keyId: process.env.RAZORPAY_KEY_ID,
+  };
 }
 
 function verifySignature(razorpayOrderId, razorpayPaymentId, razorpaySignature) {

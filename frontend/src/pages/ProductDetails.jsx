@@ -100,7 +100,7 @@ export default function ProductDetails() {
       setLoadingStep("Opening Razorpay Checkout...");
 
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_placeholder",
+        key: order.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_placeholder",
         amount: order.amount * 100,
         currency: order.currency || "INR",
         name: "TopRankPlots",

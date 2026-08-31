@@ -181,7 +181,7 @@ const options = {
 | Field | Rule |
 |-------|------|
 | `websiteUrl` | Required. Must be valid URL. Only `http://` and `https://` allowed. |
-| `categoryId` | Required. Must be integer 1–15. |
+| `categoryId` | Required. Must be integer 1–18. |
 | `amount` | Required. Must be positive integer (INR). |
 
 ### verify
