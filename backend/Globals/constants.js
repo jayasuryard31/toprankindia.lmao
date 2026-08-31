@@ -15,10 +15,6 @@ const CATEGORIES = {
   14: { id: 14, name: "Sales & CRM Platforms" },
   15: { id: 15, name: "E-Commerce & Global Retail" },
   16: { id: 16, name: "HealthTech & BioTech" },
-  17: { id: 17, name: "CyberSecurity & Privacy" },
-  18: { id: 18, name: "Gaming, VR & Metaverse" },
-  19: { id: 19, name: "Mobile & App Ecosystems" },
-  20: { id: 20, name: "Startups & Future Innovations" },
   17: { id: 17, name: "Mobile & App Ecosystems" },
   18: { id: 18, name: "Startups & Future Innovations" },
 };

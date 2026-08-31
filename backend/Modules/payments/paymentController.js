@@ -47,16 +47,25 @@ async function webhook(req, res) {
     const razorpaySignature = req.headers["x-razorpay-signature"];
     const event = req.body?.event;
 
-    if (!event) return res.json(ApiResponse.result("BAD_REQUEST", { message: "Missing event" }));
+    if (!event) return res.status(400).json(ApiResponse.result("BAD_REQUEST", { message: "Missing event" }));
 
-    if (process.env.RAZORPAY_WEBHOOK_SECRET && razorpaySignature) {
+    if (process.env.RAZORPAY_WEBHOOK_SECRET) {
+      if (!razorpaySignature) {
+        return res.status(400).json(ApiResponse.result("BAD_REQUEST", { message: "Missing webhook signature header" }));
+      }
+
+      const payload = req.rawBody || JSON.stringify(req.body);
       const expectedSignature = crypto
         .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET)
-        .update(JSON.stringify(req.body))
+        .update(payload)
         .digest("hex");
 
-      if (!crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(razorpaySignature))) {
-        return res.json(ApiResponse.result("BAD_REQUEST", { message: "Invalid webhook signature" }));
+      const expectedBuf = Buffer.from(expectedSignature, "utf8");
+      const signatureBuf = Buffer.from(razorpaySignature, "utf8");
+
+      if (expectedBuf.length !== signatureBuf.length || !crypto.timingSafeEqual(expectedBuf, signatureBuf)) {
+        console.warn("[Payment] Invalid webhook signature received");
+        return res.status(400).json(ApiResponse.result("BAD_REQUEST", { message: "Invalid webhook signature" }));
       }
     }
 

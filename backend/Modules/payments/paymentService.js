@@ -116,15 +116,26 @@ async function createOrder(websiteUrl, categoryId, amount) {
 }
 
 function verifySignature(razorpayOrderId, razorpayPaymentId, razorpaySignature) {
+  if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) return false;
+  const secret = process.env.RAZORPAY_KEY_SECRET;
+  if (!secret) {
+    console.error("[Payment] RAZORPAY_KEY_SECRET is not configured");
+    return false;
+  }
   const body = razorpayOrderId + "|" + razorpayPaymentId;
   const expectedSignature = crypto
-    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+    .createHmac("sha256", secret)
     .update(body)
     .digest("hex");
-  return crypto.timingSafeEqual(
-    Buffer.from(expectedSignature),
-    Buffer.from(razorpaySignature)
-  );
+
+  const expectedBuf = Buffer.from(expectedSignature, "utf8");
+  const signatureBuf = Buffer.from(razorpaySignature, "utf8");
+
+  if (expectedBuf.length !== signatureBuf.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(expectedBuf, signatureBuf);
 }
 
 async function verifyPayment(razorpayOrderId, razorpayPaymentId, razorpaySignature) {
@@ -138,7 +149,7 @@ async function verifyPayment(razorpayOrderId, razorpayPaymentId, razorpaySignatu
     return { product, categoryRank, allTimeRank, alreadyProcessed: true };
   }
 
-  if (razorpaySignature && !verifySignature(razorpayOrderId, razorpayPaymentId, razorpaySignature)) {
+  if (!razorpaySignature || !verifySignature(razorpayOrderId, razorpayPaymentId, razorpaySignature)) {
     throw new Error("Invalid payment signature");
   }
 
